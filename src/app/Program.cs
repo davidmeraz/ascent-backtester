@@ -22,6 +22,16 @@ internal static class Program
 
     public static int Main(string[] args)
     {
+        bool openUi = args.Length == 0 || (args[0] == "ui"
+            && !args.Contains("--help", StringComparer.Ordinal)
+            && !args.Contains("--json", StringComparer.Ordinal));
+        if (openUi)
+        {
+            var uiArgs = new Arguments(args);
+            uiArgs.Allow("workspace");
+            return DesktopLauncher.Run(Workspace.Find(uiArgs.Optional("workspace")));
+        }
+
         bool json = args.Contains("--json", StringComparer.Ordinal);
         using var cancellation = new CancellationTokenSource();
         Console.CancelKeyPress += (_, eventArgs) => { eventArgs.Cancel = true; cancellation.Cancel(); };
@@ -29,7 +39,7 @@ internal static class Program
         {
             var input = new Arguments(args);
             string command = string.Join(" ", input.Words);
-            if (command.Length == 0 || command == "help" || input.Has("help"))
+            if (command == "help" || input.Has("help"))
             {
                 Write(new { help = Help }, json, Help);
                 return 0;

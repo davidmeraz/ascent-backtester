@@ -126,11 +126,12 @@ public sealed class BacktestRunner
                 }
                 else if (targetHit)
                 {
-                    UpdateExcursion(worstPrice, targetPrice!.Value);
+                    var exitFill = targetPrice!.Value;
+                    UpdateExcursion(worstPrice, exitFill);
                     var exitComm = Math.Abs(position) * request.CommissionPerContractPerSide;
                     paidCommissions += exitComm;
-                    CloseActivePosition(bar.CloseTimeUtc, targetPrice.Value, "Take profit", exitComm);
-                    strategy.OnExecution(new ExecutionReport(bar.CloseTimeUtc, 0, targetPrice.Value));
+                    CloseActivePosition(bar.CloseTimeUtc, exitFill, "Take profit", exitComm);
+                    strategy.OnExecution(new ExecutionReport(bar.CloseTimeUtc, 0, exitFill));
                 }
                 else
                 {
