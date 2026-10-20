@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>Futures.Analyzer</RootNamespace>
+    <AssemblyName>Futures.Analyzer</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../core/Core.csproj" />
+  </ItemGroup>
+</Project>

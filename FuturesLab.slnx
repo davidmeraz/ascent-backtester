@@ -1,0 +1,7 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/analyzer/Analyzer.csproj" />
+    <Project Path="src/app/App.csproj" />
+    <Project Path="src/core/Core.csproj" />
+  </Folder>
+</Solution>
