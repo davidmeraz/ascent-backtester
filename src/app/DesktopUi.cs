@@ -55,6 +55,8 @@ internal sealed class MainWindow : Window
 {
     private readonly string workspace;
     private readonly TextBox fileBox;
+    private readonly TextBox fromBox;
+    private readonly TextBox toBox;
     private readonly CheckBox ticksCheck;
     private readonly ComboBox instrumentBox;
     private readonly TextBox fastBox;
@@ -64,6 +66,10 @@ internal sealed class MainWindow : Window
     private readonly TextBox targetBox;
     private readonly TextBox commBox;
     private readonly TextBox slipBox;
+    private readonly TextBox sessionStartBox;
+    private readonly TextBox sessionEndBox;
+    private readonly TextBox maxLossBox;
+    private readonly TextBox maxTradesBox;
     private readonly TextBlock pnlMetric;
     private readonly TextBlock winRateMetric;
     private readonly TextBlock closedDdMetric;
@@ -90,22 +96,29 @@ internal sealed class MainWindow : Window
         };
 
         // === PANEL IZQUIERDO: CONFIGURACIÓN ===
-        fileBox = CreateInput("(Muestra integrada de ES)", 200);
+        string? defaultDatabentoPath = Workspace.FindDatabentoMinuteFile(workspace, adjusted: true);
+        fileBox = CreateInput(defaultDatabentoPath ?? "(Muestra integrada de ES)", 200);
+        fromBox = CreateInput(defaultDatabentoPath is not null ? "2026-10-01" : "");
+        toBox = CreateInput(defaultDatabentoPath is not null ? "2026-10-30" : "");
         ticksCheck = new CheckBox { Content = "Archivo Tick-by-Tick (Bid/Ask)", Foreground = Brushes.LightGray, Margin = new Thickness(0, 4, 0, 8) };
         instrumentBox = new ComboBox
         {
             ItemsSource = new[] { "ES", "NQ" },
-            SelectedIndex = 0,
+            SelectedIndex = defaultDatabentoPath is not null ? 1 : 0,
             HorizontalAlignment = HorizontalAlignment.Stretch,
             Margin = new Thickness(0, 0, 0, 8)
         };
-        fastBox = CreateInput("5");
-        slowBox = CreateInput("12");
+        fastBox = CreateInput("20");
+        slowBox = CreateInput("25");
         qtyBox = CreateInput("1");
-        stopBox = CreateInput("20");
-        targetBox = CreateInput("48");
+        stopBox = CreateInput("40");
+        targetBox = CreateInput("120");
         commBox = CreateInput("2.50");
         slipBox = CreateInput("1");
+        sessionStartBox = CreateInput("13:30");
+        sessionEndBox = CreateInput("20:00");
+        maxLossBox = CreateInput("");
+        maxTradesBox = CreateInput("2");
 
         var browseBtn = new Button
         {
@@ -148,9 +161,11 @@ internal sealed class MainWindow : Window
             Foreground = SolidColorBrush.Parse("#38BDF8"),
             Margin = new Thickness(0, 0, 0, 10)
         });
-        sidebarStack.Children.Add(SectionLabel("1. Datos Históricos"));
+        sidebarStack.Children.Add(SectionLabel("1. Datos Históricos (Databento / NT8)"));
         sidebarStack.Children.Add(fileBox);
         sidebarStack.Children.Add(browseBtn);
+        sidebarStack.Children.Add(FieldRow("Desde UTC (AAAA-MM-DD)", fromBox));
+        sidebarStack.Children.Add(FieldRow("Hasta UTC (AAAA-MM-DD)", toBox));
         sidebarStack.Children.Add(ticksCheck);
 
         sidebarStack.Children.Add(SectionLabel("2. Instrumento y Estrategia SMA"));
@@ -159,11 +174,15 @@ internal sealed class MainWindow : Window
         sidebarStack.Children.Add(FieldRow("SMA Lenta", slowBox));
         sidebarStack.Children.Add(FieldRow("Contratos", qtyBox));
 
-        sidebarStack.Children.Add(SectionLabel("3. Gestión de Riesgo y Costos"));
+        sidebarStack.Children.Add(SectionLabel("3. Gestión de Riesgo y Sesión"));
         sidebarStack.Children.Add(FieldRow("Stop Loss (ticks)", stopBox));
         sidebarStack.Children.Add(FieldRow("Take Profit (ticks)", targetBox));
         sidebarStack.Children.Add(FieldRow("Comisión ($/lado)", commBox));
         sidebarStack.Children.Add(FieldRow("Slippage (ticks)", slipBox));
+        sidebarStack.Children.Add(FieldRow("Inicio Sesión (UTC)", sessionStartBox));
+        sidebarStack.Children.Add(FieldRow("Fin Sesión (UTC)", sessionEndBox));
+        sidebarStack.Children.Add(FieldRow("Máx. Pérdida Día ($)", maxLossBox));
+        sidebarStack.Children.Add(FieldRow("Máx. Trades Día", maxTradesBox));
         sidebarStack.Children.Add(runBtn);
 
         statusBanner = new TextBlock
@@ -255,6 +274,12 @@ internal sealed class MainWindow : Window
             int? tpTicks = int.TryParse(targetBox.Text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int tp) && tp > 0 ? tp : null;
             double comm = double.Parse(commBox.Text ?? "2.5", CultureInfo.InvariantCulture);
             int slip = int.Parse(slipBox.Text ?? "1", CultureInfo.InvariantCulture);
+            TimeOnly? sessionStart = TimeOnly.TryParseExact((sessionStartBox.Text ?? "").Trim(), "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out var ss) ? ss : null;
+            TimeOnly? sessionEnd = TimeOnly.TryParseExact((sessionEndBox.Text ?? "").Trim(), "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out var se) ? se : null;
+            double? maxDailyLoss = double.TryParse((maxLossBox.Text ?? "").Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out double mdl) && mdl > 0 ? mdl : null;
+            int? maxDailyTrades = int.TryParse((maxTradesBox.Text ?? "").Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out int mdt) && mdt > 0 ? mdt : null;
+            DateTime? fromUtc = ParseDateFilter(fromBox.Text, endOfDay: false);
+            DateTime? toUtc = ParseDateFilter(toBox.Text, endOfDay: true);
 
             IReadOnlyList<Bar> bars = Array.Empty<Bar>();
             IReadOnlyList<Tick> ticks = Array.Empty<Tick>();
@@ -266,11 +291,11 @@ internal sealed class MainWindow : Window
             }
             else if (ticksCheck.IsChecked == true)
             {
-                ticks = new NinjaTraderTickImporter().Read(inputText);
+                ticks = new NinjaTraderTickImporter().Read(inputText, fromUtc, toUtc);
             }
             else
             {
-                bars = new NinjaTraderMinuteImporter().Read(inputText);
+                bars = new NinjaTraderMinuteImporter().Read(inputText, fromUtc, toUtc);
             }
 
             var result = new BacktestRunner().Run(new BacktestRequest
@@ -284,7 +309,11 @@ internal sealed class MainWindow : Window
                 StopLossTicks = slTicks,
                 TakeProfitTicks = tpTicks,
                 CommissionPerContractPerSide = comm,
-                SlippageTicks = slip
+                SlippageTicks = slip,
+                SessionStartUtc = sessionStart,
+                SessionEndUtc = sessionEnd,
+                MaxDailyLossUsd = maxDailyLoss,
+                MaxTradesPerDay = maxDailyTrades
             });
 
             pnlMetric.Text = $"{result.Summary.NetProfit:+0.00;-0.00;0.00} USD";
@@ -298,7 +327,7 @@ internal sealed class MainWindow : Window
             PopulatePropFirms(result);
             PopulateTrades(result);
 
-            statusBanner.Text = $"Simulación completada: {result.Summary.Bars} velas procesadas, {result.Summary.ClosedTrades} trades cerrados ({spec.Symbol}).";
+            statusBanner.Text = $"Simulación completada: {result.Summary.Bars:N0} velas procesadas, {result.Summary.ClosedTrades:N0} trades cerrados ({spec.Symbol}).";
             statusBanner.Foreground = SolidColorBrush.Parse("#34D399");
         }
         catch (Exception ex)
@@ -308,10 +337,23 @@ internal sealed class MainWindow : Window
         }
     }
 
+    private static DateTime? ParseDateFilter(string? raw, bool endOfDay)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return null;
+        string trimmed = raw.Trim();
+        if (DateTime.TryParseExact(trimmed, "yyyy-MM-dd", CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out DateTime day))
+            return endOfDay ? day.AddDays(1) : day;
+        if (DateTime.TryParse(trimmed, CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out DateTime dt))
+            return DateTime.SpecifyKind(dt, DateTimeKind.Utc);
+        throw new ArgumentException($"Fecha no válida '{raw}' (usa AAAA-MM-DD).");
+    }
+
     private void PopulatePropFirms(BacktestResult result)
     {
         propFirmRows.Children.Clear();
-        string propRoot = Path.Combine(workspace, "prop-firms");
+        string propRoot = Workspace.FindPropFirmsDirectory(workspace);
         var firms = PropFirmEvaluator.LoadAll(propRoot);
         var evaluator = new PropFirmEvaluator();
 
@@ -345,8 +387,21 @@ internal sealed class MainWindow : Window
     private void PopulateTrades(BacktestResult result)
     {
         tradeRows.Children.Clear();
-        foreach (var t in result.Trades)
+        const int maxRenderedTrades = 200;
+        int startIndex = Math.Max(0, result.Trades.Count - maxRenderedTrades);
+        if (startIndex > 0)
         {
+            tradeRows.Children.Add(new TextBlock
+            {
+                Text = $"Mostrando las últimas {maxRenderedTrades} de {result.Trades.Count:N0} operaciones cerradas:",
+                Foreground = SolidColorBrush.Parse("#94A3B8"),
+                FontSize = 11,
+                Margin = new Thickness(0, 0, 0, 4)
+            });
+        }
+        for (int i = startIndex; i < result.Trades.Count; i++)
+        {
+            var t = result.Trades[i];
             string color = t.NetProfit >= 0 ? "#34D399" : "#F87171";
             var row = new Border
             {
@@ -487,9 +542,17 @@ internal sealed class ChartSurface : Control
         double equityTop = priceHeight + 14;
         double equityHeight = Math.Max(40, bounds.Height - equityTop - 8);
 
-        var bars = current.Signals;
-        double minPrice = bars.Min(b => b.Low);
-        double maxPrice = bars.Max(b => b.High);
+        var allBars = current.Signals;
+        const int maxVisibleBars = 360;
+        int barStart = Math.Max(0, allBars.Count - maxVisibleBars);
+        int visibleCount = allBars.Count - barStart;
+        double minPrice = double.MaxValue;
+        double maxPrice = double.MinValue;
+        for (int i = barStart; i < allBars.Count; i++)
+        {
+            if (allBars[i].Low < minPrice) minPrice = allBars[i].Low;
+            if (allBars[i].High > maxPrice) maxPrice = allBars[i].High;
+        }
         if (Math.Abs(maxPrice - minPrice) < 1e-6) maxPrice = minPrice + 1;
 
         var gridPen = new Pen(SolidColorBrush.Parse("#1E293B"), 1);
@@ -506,15 +569,15 @@ internal sealed class ChartSurface : Control
         var fastPen = new Pen(SolidColorBrush.Parse("#38BDF8"), 1.8);
         var slowPen = new Pen(SolidColorBrush.Parse("#F59E0B"), 1.8);
 
-        double stepX = bounds.Width / Math.Max(1, bars.Count);
+        double stepX = bounds.Width / Math.Max(1, visibleCount);
         double candleWidth = Math.Clamp(stepX * 0.65, 2.0, 10.0);
 
         Point? prevFast = null;
         Point? prevSlow = null;
 
-        for (int i = 0; i < bars.Count; i++)
+        for (int i = 0; i < visibleCount; i++)
         {
-            var b = bars[i];
+            var b = allBars[barStart + i];
             double x = i * stepX + stepX * 0.5;
             double yHigh = MapPrice(b.High);
             double yLow = MapPrice(b.Low);
@@ -545,7 +608,7 @@ internal sealed class ChartSurface : Control
         context.DrawLine(gridPen, new Point(0, equityTop), new Point(bounds.Width, equityTop));
         if (current.Trades.Count > 0)
         {
-            var points = new List<double> { 0d };
+            var points = new List<double>(current.Trades.Count + 1) { 0d };
             double eq = 0d;
             foreach (var t in current.Trades)
             {
@@ -555,12 +618,22 @@ internal sealed class ChartSurface : Control
             double minEq = Math.Min(0, points.Min());
             double maxEq = Math.Max(1, points.Max());
             var eqPen = new Pen(SolidColorBrush.Parse("#A855F7"), 2.2);
-            for (int i = 1; i < points.Count; i++)
+            int stride = Math.Max(1, points.Count / 600);
+            int prevIdx = 0;
+            for (int i = stride; i < points.Count; i += stride)
             {
-                double x1 = (i - 1) * (bounds.Width / Math.Max(1, points.Count - 1));
-                double x2 = i * (bounds.Width / Math.Max(1, points.Count - 1));
-                double y1 = equityTop + equityHeight - ((points[i - 1] - minEq) / (maxEq - minEq)) * (equityHeight - 8);
-                double y2 = equityTop + equityHeight - ((points[i] - minEq) / (maxEq - minEq)) * (equityHeight - 8);
+                DrawEquitySegment(prevIdx, i);
+                prevIdx = i;
+            }
+            if (prevIdx < points.Count - 1)
+                DrawEquitySegment(prevIdx, points.Count - 1);
+
+            void DrawEquitySegment(int idx1, int idx2)
+            {
+                double x1 = idx1 * (bounds.Width / Math.Max(1, points.Count - 1));
+                double x2 = idx2 * (bounds.Width / Math.Max(1, points.Count - 1));
+                double y1 = equityTop + equityHeight - ((points[idx1] - minEq) / (maxEq - minEq)) * (equityHeight - 8);
+                double y2 = equityTop + equityHeight - ((points[idx2] - minEq) / (maxEq - minEq)) * (equityHeight - 8);
                 context.DrawLine(eqPen, new Point(x1, y1), new Point(x2, y2));
             }
         }

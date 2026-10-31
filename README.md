@@ -14,3 +14,5 @@ Motor de backtesting y simulación en C# (.NET 10) para estrategias de futuros (
 5. **Guardián de Sesión y Riesgo Diario**:
    - Ventana operativa (`--session-start`, `--session-end`) con cierre automático al terminar la sesión.
    - Límites diarios (`--max-daily-loss`, `--max-daily-trades`).
+6. **Pipeline de Datos Históricos (Databento -> NinjaTrader 8 / Ascent Backtester)**:
+   - Cotización y descarga autenticada en [`data/databento/scripts/descargar_nq_databento.py`](data/databento/scripts/descargar_nq_databento.py) con conversión automática a cierre exclusivo UTC, detección de rollovers trimestrales (`rollovers.json`) y serie continua *Back-Adjusted* (`data/databento/ohlcv-1m/`).

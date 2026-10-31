@@ -47,7 +47,7 @@ internal static class Program
             if (command == "prop-firms list")
             {
                 input.Allow("workspace");
-                string root = Path.Combine(Workspace.Find(input.Optional("workspace")), "prop-firms");
+                string root = Workspace.FindPropFirmsDirectory(Workspace.Find(input.Optional("workspace")));
                 var firms = PropFirmEvaluator.LoadAll(root);
                 var lines = firms.SelectMany(f => f.Plans.Select(p =>
                     $"{p.Id,-18} | {f.Name,-20} | Meta: ${p.ProfitTargetUsd,6:F0} | MaxDD: ${p.MaxDrawdownUsd,5:F0} ({p.DrawdownType}) | DLL: {(p.DailyLossLimitUsd.HasValue ? "$" + p.DailyLossLimitUsd.Value.ToString("F0", CultureInfo.InvariantCulture) : "Sin DLL"),-8}"));
@@ -56,10 +56,11 @@ internal static class Program
             }
             if (command == "prop-firms evaluate")
             {
-                input.Allow("input", "ticks", "plan", "instrument", "fast", "slow", "quantity", "stop-ticks", "target-ticks", "commission", "slippage", "session-start", "session-end", "max-daily-loss", "max-daily-trades", "workspace");
-                string sourcePath = Path.GetFullPath(input.Required("input"));
+                input.Allow("input", "ticks", "from", "to", "plan", "instrument", "fast", "slow", "quantity", "stop-ticks", "target-ticks", "commission", "slippage", "session-start", "session-end", "max-daily-loss", "max-daily-trades", "workspace");
+                string workspace = Workspace.Find(input.Optional("workspace"));
+                string sourcePath = ResolveSourcePath(input, workspace);
                 string? planId = input.Optional("plan");
-                string root = Path.Combine(Workspace.Find(input.Optional("workspace")), "prop-firms");
+                string root = Workspace.FindPropFirmsDirectory(workspace);
                 var firms = PropFirmEvaluator.LoadAll(root);
                 var backtest = ExecuteBacktest(input, sourcePath, cancellation.Token);
 
@@ -102,14 +103,15 @@ internal static class Program
             }
             if (command == "backtest run")
             {
-                input.Allow("input", "ticks", "instrument", "fast", "slow", "quantity", "stop-ticks", "target-ticks", "commission", "slippage", "session-start", "session-end", "max-daily-loss", "max-daily-trades", "output", "workspace");
-                string sourcePath = Path.GetFullPath(input.Required("input"));
+                input.Allow("input", "ticks", "from", "to", "instrument", "fast", "slow", "quantity", "stop-ticks", "target-ticks", "commission", "slippage", "session-start", "session-end", "max-daily-loss", "max-daily-trades", "output", "workspace");
+                string workspace = Workspace.Find(input.Optional("workspace"));
+                string sourcePath = ResolveSourcePath(input, workspace);
                 var result = ExecuteBacktest(input, sourcePath, cancellation.Token);
                 cancellation.Token.ThrowIfCancellationRequested();
                 string output = input.Optional("output") is string outputPath
                     ? Path.GetFullPath(outputPath)
                     : Path.Combine(
-                        Workspace.Find(input.Optional("workspace")),
+                        workspace,
                         "runs",
                         DateTime.UtcNow.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture) + "-" + Guid.NewGuid().ToString("N").Substring(0, 8));
                 string written = new RunArtifactWriter().Write(result, output, sourcePath);
@@ -148,9 +150,36 @@ internal static class Program
         }
     }
 
+    private static string ResolveSourcePath(Arguments input, string workspace)
+    {
+        if (input.Optional("input") is string specified)
+            return Path.GetFullPath(specified);
+        if (Workspace.FindDatabentoMinuteFile(workspace, adjusted: true) is string defaultPath)
+            return defaultPath;
+        throw new ArgumentException("Falta --input y no se encontró data/databento/ohlcv-1m/NQ_1min_UTC_cierre_ajustado.txt.");
+    }
+
+    private static DateTime? ParseDateBoundaryUtc(string? text, bool inclusiveEndOfDay)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return null;
+        string trimmed = text.Trim();
+        if (DateTime.TryParseExact(trimmed, "yyyy-MM-dd", CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out DateTime day))
+        {
+            return inclusiveEndOfDay ? day.AddDays(1) : day;
+        }
+        if (DateTime.TryParse(trimmed, CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out DateTime dt))
+        {
+            return DateTime.SpecifyKind(dt, DateTimeKind.Utc);
+        }
+        throw new ArgumentException($"Fecha UTC no válida: '{text}'. Usa formato AAAA-MM-DD.");
+    }
+
     private static BacktestResult ExecuteBacktest(Arguments input, string sourcePath, CancellationToken cancellationToken)
     {
-        string instrument = (input.Optional("instrument") ?? "ES").ToUpperInvariant();
+        string defaultInstrument = Path.GetFileName(sourcePath).StartsWith("NQ", StringComparison.OrdinalIgnoreCase) ? "NQ" : "ES";
+        string instrument = (input.Optional("instrument") ?? defaultInstrument).ToUpperInvariant();
         InstrumentSpec spec = instrument switch
         {
             "ES" => InstrumentSpec.ES,
@@ -158,9 +187,14 @@ internal static class Program
             _ => throw new ArgumentException("Instrumento no admitido: usa ES o NQ.")
         };
 
+        DateTime? fromUtc = ParseDateBoundaryUtc(input.Optional("from"), inclusiveEndOfDay: false);
+        DateTime? toUtc = ParseDateBoundaryUtc(input.Optional("to"), inclusiveEndOfDay: true);
+        if (fromUtc.HasValue && toUtc.HasValue && fromUtc.Value > toUtc.Value)
+            throw new ArgumentException("--from no puede ser posterior a --to.");
+
         bool useTicks = input.Has("ticks");
-        var bars = useTicks ? Array.Empty<Bar>() : new NinjaTraderMinuteImporter().Read(sourcePath);
-        var ticks = useTicks ? new NinjaTraderTickImporter().Read(sourcePath) : Array.Empty<Tick>();
+        var bars = useTicks ? Array.Empty<Bar>() : new NinjaTraderMinuteImporter().Read(sourcePath, fromUtc, toUtc);
+        var ticks = useTicks ? new NinjaTraderTickImporter().Read(sourcePath, fromUtc, toUtc) : Array.Empty<Tick>();
 
         return new BacktestRunner().Run(new BacktestRequest
         {
@@ -189,14 +223,16 @@ internal static class Program
 
         Futures help [--json]
         Futures prop-firms list [--workspace <carpeta>] [--json]
-        Futures prop-firms evaluate --input <datos.txt> [--ticks] [--plan <id-plan>]
+        Futures prop-firms evaluate [--input <datos.txt>] [--ticks] [--plan <id-plan>]
+            [--from 2024-01-01] [--to 2026-10-30]
             [--instrument ES|NQ] [--fast 10] [--slow 20] [--quantity 1]
             [--stop-ticks 20] [--target-ticks 40]
             [--session-start 13:30] [--session-end 20:59]
             [--max-daily-loss 1000] [--max-daily-trades 5]
             [--commission 2.5] [--slippage 1] [--workspace <carpeta>] [--json]
         Futures strategies list [--json]
-        Futures backtest run --input <datos.txt> [--ticks] [--instrument ES|NQ]
+        Futures backtest run [--input <datos.txt>] [--ticks] [--instrument ES|NQ]
+            [--from 2024-01-01] [--to 2026-10-30]
             [--fast 10] [--slow 20] [--quantity 1]
             [--stop-ticks 20] [--target-ticks 40]
             [--session-start 13:30] [--session-end 20:59]

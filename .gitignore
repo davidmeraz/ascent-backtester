@@ -5,5 +5,9 @@
 *.suo
 TestResults/
 artifacts/
+data/**/*.txt
+data/**/*.csv
+data/**/*.zst
+data/**/*.part
 runs/
 *.local.json
