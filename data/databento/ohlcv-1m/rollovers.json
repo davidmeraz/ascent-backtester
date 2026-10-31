@@ -1,0 +1,596 @@
+[
+  {
+    "bar_index": 6133,
+    "close_time_utc": "2010-06-14T00:01:00+00:00",
+    "from_instrument_id": 6641,
+    "to_instrument_id": 26715,
+    "previous_close": 1854.75,
+    "new_open": 1852.5,
+    "adjustment_points": -2.25
+  },
+  {
+    "bar_index": 84123,
+    "close_time_utc": "2010-09-13T00:01:00+00:00",
+    "from_instrument_id": 26715,
+    "to_instrument_id": 3088,
+    "previous_close": 1903.25,
+    "new_open": 1900.75,
+    "adjustment_points": -2.5
+  },
+  {
+    "bar_index": 162432,
+    "close_time_utc": "2010-12-13T00:01:00+00:00",
+    "from_instrument_id": 3088,
+    "to_instrument_id": 93735,
+    "previous_close": 2212.0,
+    "new_open": 2211.0,
+    "adjustment_points": -1.0
+  },
+  {
+    "bar_index": 236182,
+    "close_time_utc": "2011-03-14T00:01:00+00:00",
+    "from_instrument_id": 93735,
+    "to_instrument_id": 30668,
+    "previous_close": 2287.25,
+    "new_open": 2283.75,
+    "adjustment_points": -3.5
+  },
+  {
+    "bar_index": 314376,
+    "close_time_utc": "2011-06-13T00:01:00+00:00",
+    "from_instrument_id": 30668,
+    "to_instrument_id": 56972,
+    "previous_close": 2220.5,
+    "new_open": 2216.75,
+    "adjustment_points": -3.75
+  },
+  {
+    "bar_index": 396229,
+    "close_time_utc": "2011-09-12T00:01:00+00:00",
+    "from_instrument_id": 56972,
+    "to_instrument_id": 12038,
+    "previous_close": 2156.0,
+    "new_open": 2151.5,
+    "adjustment_points": -4.5
+  },
+  {
+    "bar_index": 481257,
+    "close_time_utc": "2011-12-12T00:01:00+00:00",
+    "from_instrument_id": 12038,
+    "to_instrument_id": 8870,
+    "previous_close": 2322.0,
+    "new_open": 2318.5,
+    "adjustment_points": -3.5
+  },
+  {
+    "bar_index": 558031,
+    "close_time_utc": "2012-03-13T00:01:00+00:00",
+    "from_instrument_id": 8870,
+    "to_instrument_id": 20924,
+    "previous_close": 2651.5,
+    "new_open": 2646.75,
+    "adjustment_points": -4.75
+  },
+  {
+    "bar_index": 638627,
+    "close_time_utc": "2012-06-11T00:01:00+00:00",
+    "from_instrument_id": 20924,
+    "to_instrument_id": 57494,
+    "previous_close": 2594.0,
+    "new_open": 2589.5,
+    "adjustment_points": -4.5
+  },
+  {
+    "bar_index": 725305,
+    "close_time_utc": "2012-09-17T00:01:00+00:00",
+    "from_instrument_id": 57494,
+    "to_instrument_id": 10016,
+    "previous_close": 2850.5,
+    "new_open": 2845.0,
+    "adjustment_points": -5.5
+  },
+  {
+    "bar_index": 805400,
+    "close_time_utc": "2012-12-17T00:01:00+00:00",
+    "from_instrument_id": 10016,
+    "to_instrument_id": 36931,
+    "previous_close": 2639.75,
+    "new_open": 2635.25,
+    "adjustment_points": -4.5
+  },
+  {
+    "bar_index": 874314,
+    "close_time_utc": "2013-03-12T00:01:00+00:00",
+    "from_instrument_id": 36931,
+    "to_instrument_id": 11518,
+    "previous_close": 2810.0,
+    "new_open": 2806.0,
+    "adjustment_points": -4.0
+  },
+  {
+    "bar_index": 957313,
+    "close_time_utc": "2013-06-17T00:01:00+00:00",
+    "from_instrument_id": 11518,
+    "to_instrument_id": 17591,
+    "previous_close": 2950.0,
+    "new_open": 2944.0,
+    "adjustment_points": -6.0
+  },
+  {
+    "bar_index": 1036016,
+    "close_time_utc": "2013-09-16T00:01:00+00:00",
+    "from_instrument_id": 17591,
+    "to_instrument_id": 28499,
+    "previous_close": 3210.25,
+    "new_open": 3204.5,
+    "adjustment_points": -5.75
+  },
+  {
+    "bar_index": 1116055,
+    "close_time_utc": "2013-12-16T00:01:00+00:00",
+    "from_instrument_id": 28499,
+    "to_instrument_id": 382251,
+    "previous_close": 3460.5,
+    "new_open": 3456.0,
+    "adjustment_points": -4.5
+  },
+  {
+    "bar_index": 1191059,
+    "close_time_utc": "2014-03-17T00:01:00+00:00",
+    "from_instrument_id": 382251,
+    "to_instrument_id": 8223,
+    "previous_close": 3621.75,
+    "new_open": 3614.75,
+    "adjustment_points": -7.0
+  },
+  {
+    "bar_index": 1268277,
+    "close_time_utc": "2014-06-16T00:01:00+00:00",
+    "from_instrument_id": 8223,
+    "to_instrument_id": 83745,
+    "previous_close": 3766.5,
+    "new_open": 3759.25,
+    "adjustment_points": -7.25
+  },
+  {
+    "bar_index": 1346925,
+    "close_time_utc": "2014-09-15T00:01:00+00:00",
+    "from_instrument_id": 83745,
+    "to_instrument_id": 28097,
+    "previous_close": 4053.75,
+    "new_open": 4046.25,
+    "adjustment_points": -7.5
+  },
+  {
+    "bar_index": 1426057,
+    "close_time_utc": "2014-12-15T00:01:00+00:00",
+    "from_instrument_id": 28097,
+    "to_instrument_id": 50207,
+    "previous_close": 4186.5,
+    "new_open": 4183.25,
+    "adjustment_points": -3.25
+  },
+  {
+    "bar_index": 1503913,
+    "close_time_utc": "2015-03-16T00:01:00+00:00",
+    "from_instrument_id": 50207,
+    "to_instrument_id": 58385,
+    "previous_close": 4302.5,
+    "new_open": 4296.25,
+    "adjustment_points": -6.25
+  },
+  {
+    "bar_index": 1583933,
+    "close_time_utc": "2015-06-15T00:01:00+00:00",
+    "from_instrument_id": 58385,
+    "to_instrument_id": 2913,
+    "previous_close": 4436.25,
+    "new_open": 4429.0,
+    "adjustment_points": -7.25
+  },
+  {
+    "bar_index": 1667739,
+    "close_time_utc": "2015-09-14T00:01:00+00:00",
+    "from_instrument_id": 2913,
+    "to_instrument_id": 12809,
+    "previous_close": 4356.25,
+    "new_open": 4346.0,
+    "adjustment_points": -10.25
+  },
+  {
+    "bar_index": 1753033,
+    "close_time_utc": "2015-12-14T00:01:00+00:00",
+    "from_instrument_id": 12809,
+    "to_instrument_id": 49734,
+    "previous_close": 4544.0,
+    "new_open": 4537.75,
+    "adjustment_points": -6.25
+  },
+  {
+    "bar_index": 1836909,
+    "close_time_utc": "2016-03-14T00:01:00+00:00",
+    "from_instrument_id": 49734,
+    "to_instrument_id": 765,
+    "previous_close": 4353.75,
+    "new_open": 4344.0,
+    "adjustment_points": -9.75
+  },
+  {
+    "bar_index": 1920159,
+    "close_time_utc": "2016-06-13T00:01:00+00:00",
+    "from_instrument_id": 765,
+    "to_instrument_id": 2563,
+    "previous_close": 4454.75,
+    "new_open": 4446.75,
+    "adjustment_points": -8.0
+  },
+  {
+    "bar_index": 2003450,
+    "close_time_utc": "2016-09-12T00:01:00+00:00",
+    "from_instrument_id": 2563,
+    "to_instrument_id": 2887,
+    "previous_close": 4663.75,
+    "new_open": 4659.75,
+    "adjustment_points": -4.0
+  },
+  {
+    "bar_index": 2089370,
+    "close_time_utc": "2016-12-13T00:01:00+00:00",
+    "from_instrument_id": 2887,
+    "to_instrument_id": 35888,
+    "previous_close": 4865.5,
+    "new_open": 4863.5,
+    "adjustment_points": -2.0
+  },
+  {
+    "bar_index": 2170255,
+    "close_time_utc": "2017-03-13T00:01:00+00:00",
+    "from_instrument_id": 35888,
+    "to_instrument_id": 6398,
+    "previous_close": 5373.5,
+    "new_open": 5377.5,
+    "adjustment_points": 4.0
+  },
+  {
+    "bar_index": 2254770,
+    "close_time_utc": "2017-06-12T00:01:00+00:00",
+    "from_instrument_id": 6398,
+    "to_instrument_id": 26054,
+    "previous_close": 5733.75,
+    "new_open": 5741.75,
+    "adjustment_points": 8.0
+  },
+  {
+    "bar_index": 2341491,
+    "close_time_utc": "2017-09-11T00:01:00+00:00",
+    "from_instrument_id": 26054,
+    "to_instrument_id": 15466,
+    "previous_close": 5940.5,
+    "new_open": 5948.0,
+    "adjustment_points": 7.5
+  },
+  {
+    "bar_index": 2428590,
+    "close_time_utc": "2017-12-11T00:01:00+00:00",
+    "from_instrument_id": 15466,
+    "to_instrument_id": 16210,
+    "previous_close": 6348.75,
+    "new_open": 6367.75,
+    "adjustment_points": 19.0
+  },
+  {
+    "bar_index": 2513665,
+    "close_time_utc": "2018-03-12T00:01:00+00:00",
+    "from_instrument_id": 16210,
+    "to_instrument_id": 23520,
+    "previous_close": 7120.75,
+    "new_open": 7147.0,
+    "adjustment_points": 26.25
+  },
+  {
+    "bar_index": 2600556,
+    "close_time_utc": "2018-06-11T00:01:00+00:00",
+    "from_instrument_id": 23520,
+    "to_instrument_id": 47511,
+    "previous_close": 7138.25,
+    "new_open": 7163.0,
+    "adjustment_points": 24.75
+  },
+  {
+    "bar_index": 2695331,
+    "close_time_utc": "2018-09-17T00:01:00+00:00",
+    "from_instrument_id": 47511,
+    "to_instrument_id": 16041,
+    "previous_close": 7528.0,
+    "new_open": 7556.75,
+    "adjustment_points": 28.75
+  },
+  {
+    "bar_index": 2783085,
+    "close_time_utc": "2018-12-17T00:01:00+00:00",
+    "from_instrument_id": 16041,
+    "to_instrument_id": 15657,
+    "previous_close": 6612.25,
+    "new_open": 6634.75,
+    "adjustment_points": 22.5
+  },
+  {
+    "bar_index": 2861464,
+    "close_time_utc": "2019-03-11T00:01:00+00:00",
+    "from_instrument_id": 15657,
+    "to_instrument_id": 9166,
+    "previous_close": 7017.75,
+    "new_open": 7045.0,
+    "adjustment_points": 27.25
+  },
+  {
+    "bar_index": 2958090,
+    "close_time_utc": "2019-06-19T00:01:00+00:00",
+    "from_instrument_id": 9166,
+    "to_instrument_id": 36742,
+    "previous_close": 7657.75,
+    "new_open": 7685.75,
+    "adjustment_points": 28.0
+  },
+  {
+    "bar_index": 3043392,
+    "close_time_utc": "2019-09-16T00:01:00+00:00",
+    "from_instrument_id": 36742,
+    "to_instrument_id": 15907,
+    "previous_close": 7817.5,
+    "new_open": 7839.5,
+    "adjustment_points": 22.0
+  },
+  {
+    "bar_index": 3131597,
+    "close_time_utc": "2019-12-16T00:01:00+00:00",
+    "from_instrument_id": 15907,
+    "to_instrument_id": 10204,
+    "previous_close": 8509.25,
+    "new_open": 8535.5,
+    "adjustment_points": 26.25
+  },
+  {
+    "bar_index": 3218231,
+    "close_time_utc": "2020-03-18T00:01:00+00:00",
+    "from_instrument_id": 10204,
+    "to_instrument_id": 16908,
+    "previous_close": 7187.75,
+    "new_open": 7173.75,
+    "adjustment_points": -14.0
+  },
+  {
+    "bar_index": 3304867,
+    "close_time_utc": "2020-06-17T00:01:00+00:00",
+    "from_instrument_id": 16908,
+    "to_instrument_id": 14028,
+    "previous_close": 9997.25,
+    "new_open": 9984.0,
+    "adjustment_points": -13.25
+  },
+  {
+    "bar_index": 3393014,
+    "close_time_utc": "2020-09-16T00:01:00+00:00",
+    "from_instrument_id": 14028,
+    "to_instrument_id": 16337,
+    "previous_close": 11436.25,
+    "new_open": 11421.25,
+    "adjustment_points": -15.0
+  },
+  {
+    "bar_index": 3481238,
+    "close_time_utc": "2020-12-16T00:01:00+00:00",
+    "from_instrument_id": 16337,
+    "to_instrument_id": 4378,
+    "previous_close": 12591.75,
+    "new_open": 12595.5,
+    "adjustment_points": 3.75
+  },
+  {
+    "bar_index": 3566623,
+    "close_time_utc": "2021-03-17T00:01:00+00:00",
+    "from_instrument_id": 4378,
+    "to_instrument_id": 2786,
+    "previous_close": 13158.5,
+    "new_open": 13148.0,
+    "adjustment_points": -10.5
+  },
+  {
+    "bar_index": 3654629,
+    "close_time_utc": "2021-06-16T00:01:00+00:00",
+    "from_instrument_id": 2786,
+    "to_instrument_id": 828,
+    "previous_close": 14039.25,
+    "new_open": 14031.75,
+    "adjustment_points": -7.5
+  },
+  {
+    "bar_index": 3743708,
+    "close_time_utc": "2021-09-15T00:01:00+00:00",
+    "from_instrument_id": 828,
+    "to_instrument_id": 2770,
+    "previous_close": 15414.5,
+    "new_open": 15407.5,
+    "adjustment_points": -7.0
+  },
+  {
+    "bar_index": 3830118,
+    "close_time_utc": "2021-12-13T00:01:00+00:00",
+    "from_instrument_id": 2770,
+    "to_instrument_id": 3541,
+    "previous_close": 16361.5,
+    "new_open": 16361.5,
+    "adjustment_points": 0.0
+  },
+  {
+    "bar_index": 3920770,
+    "close_time_utc": "2022-03-16T00:01:00+00:00",
+    "from_instrument_id": 3541,
+    "to_instrument_id": 2895,
+    "previous_close": 13457.75,
+    "new_open": 13453.75,
+    "adjustment_points": -4.0
+  },
+  {
+    "bar_index": 4008846,
+    "close_time_utc": "2022-06-15T00:01:00+00:00",
+    "from_instrument_id": 2895,
+    "to_instrument_id": 10391,
+    "previous_close": 11398.0,
+    "new_open": 11431.25,
+    "adjustment_points": 33.25
+  },
+  {
+    "bar_index": 4097823,
+    "close_time_utc": "2022-09-14T00:01:00+00:00",
+    "from_instrument_id": 10391,
+    "to_instrument_id": 13613,
+    "previous_close": 12058.25,
+    "new_open": 12139.25,
+    "adjustment_points": 81.0
+  },
+  {
+    "bar_index": 4186992,
+    "close_time_utc": "2022-12-14T00:01:00+00:00",
+    "from_instrument_id": 13613,
+    "to_instrument_id": 20631,
+    "previous_close": 11838.75,
+    "new_open": 11959.25,
+    "adjustment_points": 120.5
+  },
+  {
+    "bar_index": 4273495,
+    "close_time_utc": "2023-03-15T00:01:00+00:00",
+    "from_instrument_id": 20631,
+    "to_instrument_id": 3522,
+    "previous_close": 12196.75,
+    "new_open": 12326.0,
+    "adjustment_points": 129.25
+  },
+  {
+    "bar_index": 4362463,
+    "close_time_utc": "2023-06-14T00:01:00+00:00",
+    "from_instrument_id": 3522,
+    "to_instrument_id": 2130,
+    "previous_close": 14920.75,
+    "new_open": 15105.25,
+    "adjustment_points": 184.5
+  },
+  {
+    "bar_index": 4451180,
+    "close_time_utc": "2023-09-13T00:01:00+00:00",
+    "from_instrument_id": 2130,
+    "to_instrument_id": 260937,
+    "previous_close": 15311.25,
+    "new_open": 15505.5,
+    "adjustment_points": 194.25
+  },
+  {
+    "bar_index": 4540346,
+    "close_time_utc": "2023-12-13T00:01:00+00:00",
+    "from_instrument_id": 260937,
+    "to_instrument_id": 750,
+    "previous_close": 16396.0,
+    "new_open": 16609.25,
+    "adjustment_points": 213.25
+  },
+  {
+    "bar_index": 4626833,
+    "close_time_utc": "2024-03-13T00:01:00+00:00",
+    "from_instrument_id": 750,
+    "to_instrument_id": 13743,
+    "previous_close": 18232.0,
+    "new_open": 18478.5,
+    "adjustment_points": 246.5
+  },
+  {
+    "bar_index": 4721781,
+    "close_time_utc": "2024-06-19T00:01:00+00:00",
+    "from_instrument_id": 13743,
+    "to_instrument_id": 4358,
+    "previous_close": 19945.5,
+    "new_open": 20223.25,
+    "adjustment_points": 277.75
+  },
+  {
+    "bar_index": 4810499,
+    "close_time_utc": "2024-09-18T00:01:00+00:00",
+    "from_instrument_id": 4358,
+    "to_instrument_id": 106364,
+    "previous_close": 19468.75,
+    "new_open": 19705.75,
+    "adjustment_points": 237.0
+  },
+  {
+    "bar_index": 4901046,
+    "close_time_utc": "2024-12-19T00:01:00+00:00",
+    "from_instrument_id": 106364,
+    "to_instrument_id": 42288528,
+    "previous_close": 21199.25,
+    "new_open": 21472.25,
+    "adjustment_points": 273.0
+  },
+  {
+    "bar_index": 4986880,
+    "close_time_utc": "2025-03-20T00:01:00+00:00",
+    "from_instrument_id": 42288528,
+    "to_instrument_id": 42005804,
+    "previous_close": 19823.5,
+    "new_open": 20031.5,
+    "adjustment_points": 208.0
+  },
+  {
+    "bar_index": 5073566,
+    "close_time_utc": "2025-06-18T00:01:00+00:00",
+    "from_instrument_id": 42005804,
+    "to_instrument_id": 42008487,
+    "previous_close": 21681.0,
+    "new_open": 21905.5,
+    "adjustment_points": 224.5
+  },
+  {
+    "bar_index": 5163663,
+    "close_time_utc": "2025-09-18T00:01:00+00:00",
+    "from_instrument_id": 42008487,
+    "to_instrument_id": 158704,
+    "previous_close": 24341.5,
+    "new_open": 24584.25,
+    "adjustment_points": 242.75
+  },
+  {
+    "bar_index": 5250800,
+    "close_time_utc": "2025-12-17T00:01:00+00:00",
+    "from_instrument_id": 158704,
+    "to_instrument_id": 42002475,
+    "previous_close": 25077.25,
+    "new_open": 25315.0,
+    "adjustment_points": 237.75
+  },
+  {
+    "bar_index": 5337058,
+    "close_time_utc": "2026-03-18T00:01:00+00:00",
+    "from_instrument_id": 42002475,
+    "to_instrument_id": 42004058,
+    "previous_close": 24785.25,
+    "new_open": 25003.25,
+    "adjustment_points": 218.0
+  },
+  {
+    "bar_index": 5426021,
+    "close_time_utc": "2026-06-17T00:01:00+00:00",
+    "from_instrument_id": 42004058,
+    "to_instrument_id": 42004177,
+    "previous_close": 30012.75,
+    "new_open": 30330.5,
+    "adjustment_points": 317.75
+  },
+  {
+    "bar_index": 5514983,
+    "close_time_utc": "2026-09-16T00:01:00+00:00",
+    "from_instrument_id": 42004177,
+    "to_instrument_id": 261401,
+    "previous_close": 28984.25,
+    "new_open": 29277.5,
+    "adjustment_points": 293.25
+  }
+]

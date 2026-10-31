@@ -19,18 +19,19 @@ public sealed class NinjaTraderTickImporter
         "yyyyMMdd HHmmss"
     ];
 
-    public IReadOnlyList<Tick> Read(string path)
+    public IReadOnlyList<Tick> Read(string path, DateTime? fromUtc = null, DateTime? toUtc = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         using var reader = File.OpenText(path);
-        return Read(reader, Path.GetFullPath(path));
+        return Read(reader, Path.GetFullPath(path), fromUtc, toUtc);
     }
 
-    public IReadOnlyList<Tick> Read(TextReader reader, string sourceName = "input")
+    public IReadOnlyList<Tick> Read(TextReader reader, string sourceName = "input", DateTime? fromUtc = null, DateTime? toUtc = null)
     {
         ArgumentNullException.ThrowIfNull(reader);
         var ticks = new List<Tick>();
         var lineNumber = 0;
+        DateTime? previousTime = null;
         while (reader.ReadLine() is { } line)
         {
             lineNumber++;
@@ -42,8 +43,13 @@ public sealed class NinjaTraderTickImporter
                     CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
                     out var time))
                 throw Error("Expected UTC timestamp in format 'yyyyMMdd HHmmss [fffffff]'.");
-            if (ticks.Count > 0 && time < ticks[ticks.Count - 1].TimeUtc)
+            if (previousTime.HasValue && time < previousTime.Value)
                 throw Error("Tick timestamps must be in non-decreasing UTC order.");
+            previousTime = time;
+            if (fromUtc.HasValue && time < fromUtc.Value)
+                continue;
+            if (toUtc.HasValue && time > toUtc.Value)
+                break;
 
             var price = ParsePrice(1);
             var bid = fields.Length == 5 ? ParsePrice(2) : price;
@@ -65,7 +71,7 @@ public sealed class NinjaTraderTickImporter
             }
         }
         if (ticks.Count == 0)
-            throw new DataValidationException(sourceName, 1, "The file contains no ticks.");
+            throw new DataValidationException(sourceName, 1, "The file contains no ticks in the requested range.");
         return ticks.AsReadOnly();
     }
 }

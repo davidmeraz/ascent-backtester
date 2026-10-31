@@ -22,18 +22,19 @@ public sealed class DataValidationException : FormatException
 /// <summary>Reads NinjaTrader minute exports: UTC end-of-bar timestamps, six semicolon fields.</summary>
 public sealed class NinjaTraderMinuteImporter
 {
-    public IReadOnlyList<Bar> Read(string path)
+    public IReadOnlyList<Bar> Read(string path, DateTime? fromUtc = null, DateTime? toUtc = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         using var reader = File.OpenText(path);
-        return Read(reader, Path.GetFullPath(path));
+        return Read(reader, Path.GetFullPath(path), fromUtc, toUtc);
     }
 
-    public IReadOnlyList<Bar> Read(TextReader reader, string sourceName = "input")
+    public IReadOnlyList<Bar> Read(TextReader reader, string sourceName = "input", DateTime? fromUtc = null, DateTime? toUtc = null)
     {
         ArgumentNullException.ThrowIfNull(reader);
         var bars = new List<Bar>();
         var lineNumber = 0;
+        DateTime? previousTime = null;
         while (reader.ReadLine() is { } line)
         {
             lineNumber++;
@@ -44,8 +45,13 @@ public sealed class NinjaTraderMinuteImporter
                     CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
                     out var time) || time.Second != 0)
                 throw Error("Expected an exact UTC minute-close timestamp yyyyMMdd HHmmss with seconds 00.");
-            if (bars.Count > 0 && time <= bars[bars.Count - 1].CloseTimeUtc)
+            if (previousTime.HasValue && time <= previousTime.Value)
                 throw Error("Timestamps must increase strictly; duplicates and unsorted rows are not accepted.");
+            previousTime = time;
+            if (fromUtc.HasValue && time < fromUtc.Value)
+                continue;
+            if (toUtc.HasValue && time > toUtc.Value)
+                break;
             var open = ParsePrice(1);
             var high = ParsePrice(2);
             var low = ParsePrice(3);
@@ -66,7 +72,7 @@ public sealed class NinjaTraderMinuteImporter
             }
         }
         if (bars.Count == 0)
-            throw new DataValidationException(sourceName, 1, "The file contains no minute bars.");
+            throw new DataValidationException(sourceName, 1, "The file contains no minute bars in the requested range.");
         return bars.AsReadOnly();
     }
 }

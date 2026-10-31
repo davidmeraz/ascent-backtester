@@ -1,0 +1,271 @@
+{
+  "created_utc": "2026-10-31T18:15:26.488555+00:00",
+  "notice": "Estimaciones públicas, sin cuenta y sin compra; pueden variar según fecha, impuestos, créditos, licencia y configuración. El fin de Databento es exclusivo. NQ.v.0 no incluye todos los vencimientos simultáneos.",
+  "references": [
+    "https://databento.com/pricing",
+    "https://databento.com/docs/conventions/symbology",
+    "https://www.kibot.com/custom-order.html",
+    "https://www.kibot.com/guides/ninjatrader-8-import-futures-data.html"
+  ],
+  "quotes": [
+    {
+      "provider": "Databento",
+      "product": "NQ.v.0, continuo por volumen",
+      "start_inclusive_utc": "2010-06-06",
+      "end_exclusive_utc": "2026-10-30",
+      "schema": "ohlcv-1m",
+      "params": {
+        "dataset": "GLBX.MDP3",
+        "symbols": "NQ.v.0",
+        "schema": "ohlcv-1m",
+        "start": "2010-06-06T00:00:00",
+        "end": "2026-10-30T00:00:00",
+        "encoding": "dbn",
+        "stype_in": "continuous"
+      },
+      "result": {
+        "estimated_size": 311312008,
+        "estimated_cost_usd": 20.29523305594921,
+        "net_estimated_cost_usd": 20.29523305594921,
+        "standard_plan_cost_usd": 0.0,
+        "estimated_file_count": 5091,
+        "warnings": [],
+        "errors": [],
+        "can_submit": false
+      }
+    },
+    {
+      "provider": "Databento",
+      "product": "NQ.v.0, continuo por volumen",
+      "start_inclusive_utc": "2016-01-01",
+      "end_exclusive_utc": "2026-01-01",
+      "schema": "ohlcv-1m",
+      "params": {
+        "dataset": "GLBX.MDP3",
+        "symbols": "NQ.v.0",
+        "schema": "ohlcv-1m",
+        "start": "2016-01-01T00:00:00",
+        "end": "2026-01-01T00:00:00",
+        "encoding": "dbn",
+        "stype_in": "continuous"
+      },
+      "result": {
+        "estimated_size": 195705328,
+        "estimated_cost_usd": 12.75853529572487,
+        "net_estimated_cost_usd": 12.75853529572487,
+        "standard_plan_cost_usd": 0.0,
+        "estimated_file_count": 3114,
+        "warnings": [],
+        "errors": [],
+        "can_submit": false
+      }
+    },
+    {
+      "provider": "Databento",
+      "product": "NQ.v.0, continuo por volumen",
+      "start_inclusive_utc": "2016-01-01",
+      "end_exclusive_utc": "2026-01-01",
+      "schema": "tbbo",
+      "params": {
+        "dataset": "GLBX.MDP3",
+        "symbols": "NQ.v.0",
+        "schema": "tbbo",
+        "start": "2016-01-01T00:00:00",
+        "end": "2026-01-01T00:00:00",
+        "encoding": "dbn",
+        "stype_in": "continuous"
+      },
+      "result": {
+        "estimated_size": 59469783040,
+        "estimated_cost_usd": 1550.7954406738281,
+        "net_estimated_cost_usd": 1550.7954406738281,
+        "standard_plan_cost_usd": 1516.9152906537056,
+        "estimated_file_count": 3114,
+        "warnings": [],
+        "errors": [],
+        "can_submit": false
+      }
+    },
+    {
+      "provider": "Databento",
+      "product": "NQ.v.0, continuo por volumen",
+      "start_inclusive_utc": "2016-01-01",
+      "end_exclusive_utc": "2026-01-01",
+      "schema": "mbp-1",
+      "params": {
+        "dataset": "GLBX.MDP3",
+        "symbols": "NQ.v.0",
+        "schema": "mbp-1",
+        "start": "2016-01-01T00:00:00",
+        "end": "2026-01-01T00:00:00",
+        "encoding": "dbn",
+        "stype_in": "continuous"
+      },
+      "result": {
+        "estimated_size": 877934398480,
+        "estimated_cost_usd": 1471.752223804593,
+        "net_estimated_cost_usd": 1471.752223804593,
+        "standard_plan_cost_usd": 1406.9519546180964,
+        "estimated_file_count": 3134,
+        "warnings": [],
+        "errors": [],
+        "can_submit": false
+      }
+    },
+    {
+      "provider": "Databento",
+      "product": "NQ.v.0, continuo por volumen",
+      "start_inclusive_utc": "2020-02-01",
+      "end_exclusive_utc": "2020-05-01",
+      "schema": "tbbo",
+      "params": {
+        "dataset": "GLBX.MDP3",
+        "symbols": "NQ.v.0",
+        "schema": "tbbo",
+        "start": "2020-02-01T00:00:00",
+        "end": "2020-05-01T00:00:00",
+        "encoding": "dbn",
+        "stype_in": "continuous"
+      },
+      "result": {
+        "estimated_size": 2101438480,
+        "estimated_cost_usd": 54.79927867650986,
+        "net_estimated_cost_usd": 54.79927867650986,
+        "standard_plan_cost_usd": 54.79927867650986,
+        "estimated_file_count": 79,
+        "warnings": [],
+        "errors": [],
+        "can_submit": false
+      }
+    },
+    {
+      "provider": "Databento",
+      "product": "NQ.v.0, continuo por volumen",
+      "start_inclusive_utc": "2018-02-01",
+      "end_exclusive_utc": "2018-04-01",
+      "schema": "tbbo",
+      "params": {
+        "dataset": "GLBX.MDP3",
+        "symbols": "NQ.v.0",
+        "schema": "tbbo",
+        "start": "2018-02-01T00:00:00",
+        "end": "2018-04-01T00:00:00",
+        "encoding": "dbn",
+        "stype_in": "continuous"
+      },
+      "result": {
+        "estimated_size": 890973200,
+        "estimated_cost_usd": 23.23393672704697,
+        "net_estimated_cost_usd": 23.23393672704697,
+        "standard_plan_cost_usd": 23.23393672704697,
+        "estimated_file_count": 52,
+        "warnings": [],
+        "errors": [],
+        "can_submit": false
+      }
+    },
+    {
+      "provider": "Kibot",
+      "product": "NQ continuo",
+      "params": {
+        "asset_class": "futures",
+        "symbol_count": 1,
+        "intervals": [
+          "ohlc-1",
+          "tickba"
+        ],
+        "start_date": "2016-01-01",
+        "end_date": "2025-12-31",
+        "futures_variant": "continuous",
+        "symbols": [
+          "NQ"
+        ],
+        "preset_sku": "",
+        "preset_prefix": "",
+        "note": "",
+        "regularsession": false,
+        "adjustment": "unadjusted",
+        "format": "ninjatrader",
+        "customdate": "",
+        "timezone": "utc",
+        "timezone_offset": "",
+        "availability": null
+      },
+      "result": {
+        "asset_class": "futures_continuous",
+        "symbol_count": 1,
+        "lines": [
+          {
+            "kind": "ohlc-1",
+            "label": "1-minute OHLC",
+            "instruments": 1,
+            "years": 10.0,
+            "catalog_years": 17,
+            "time_factor": 0.814,
+            "total_bytes": 293365244,
+            "size_factor": 1.0,
+            "derived": true,
+            "standalone_total": 89.49,
+            "total": 22.37,
+            "unit_price": 22.37
+          },
+          {
+            "kind": "tickba",
+            "label": "Tick + bid/ask",
+            "instruments": 1,
+            "years": 10.0,
+            "catalog_years": 17,
+            "time_factor": 0.814,
+            "total_bytes": 64755856707,
+            "size_factor": 1.178,
+            "total": 340.0,
+            "unit_price": 340.0
+          }
+        ],
+        "subtotal": 362.37,
+        "delivery": 0.0,
+        "total": 362.37,
+        "warnings": [],
+        "currency": "USD"
+      },
+      "availability_check": {
+        "entries": [
+          {
+            "asset_class": "futures",
+            "symbol": "NQ",
+            "kind": "ohlc-1",
+            "exists": true,
+            "size_bytes": 293365244,
+            "first_date": "2009-09-27",
+            "last_date": "2026-10-30",
+            "error": null
+          },
+          {
+            "asset_class": "futures",
+            "symbol": "NQ",
+            "kind": "tickba",
+            "exists": true,
+            "size_bytes": 64755856707,
+            "first_date": "2009-09-28",
+            "last_date": "2026-10-30",
+            "error": null
+          }
+        ],
+        "summary": {
+          "ohlc-1": {
+            "total_bytes": 293365244,
+            "count": 1,
+            "first_date": "2009-09-27",
+            "last_date": "2026-10-30"
+          },
+          "tickba": {
+            "total_bytes": 64755856707,
+            "count": 1,
+            "first_date": "2009-09-28",
+            "last_date": "2026-10-30"
+          }
+        }
+      }
+    }
+  ]
+}

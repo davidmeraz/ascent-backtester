@@ -25,4 +25,32 @@ internal static class Workspace
         }
         throw new DirectoryNotFoundException("No se encontró el proyecto. Indica --workspace <carpeta>.");
     }
+
+    public static string FindPropFirmsDirectory(string workspace)
+    {
+        foreach (string candidate in new[]
+        {
+            Path.Combine(workspace, "prop-firms"),
+            Path.GetFullPath(Path.Combine(workspace, "..", "prop-firms"))
+        })
+        {
+            if (Directory.Exists(candidate)) return candidate;
+        }
+        return Path.Combine(workspace, "prop-firms");
+    }
+
+    public static string? FindDatabentoMinuteFile(string workspace, bool adjusted = true)
+    {
+        string fileName = adjusted ? "NQ_1min_UTC_cierre_ajustado.txt" : "NQ_1min_UTC_cierre.txt";
+        foreach (string candidate in new[]
+        {
+            Path.Combine(workspace, "data", "databento", "ohlcv-1m", fileName),
+            Path.Combine(workspace, "ascent-backtester", "data", "databento", "ohlcv-1m", fileName),
+            Path.GetFullPath(Path.Combine(workspace, "..", "ascent-backtester", "data", "databento", "ohlcv-1m", fileName))
+        })
+        {
+            if (File.Exists(candidate)) return candidate;
+        }
+        return null;
+    }
 }
