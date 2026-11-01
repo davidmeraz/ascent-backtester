@@ -304,6 +304,8 @@ def convert_tbbo(source_path: Path, out_dir: Path) -> dict[str, object]:
                 first_ns = ts_100ns
             last_ns = ts_100ns
             tick_count += 1
+            if tick_count % 5_000_000 == 0:
+                print(f"  Convertidos {tick_count:,} ticks...", flush=True)
             out_f.write(
                 f"{format_tick_utc(ts_100ns)};{format_price(price)};{format_price(bid)};{format_price(ask)};{vol}\n"
             )

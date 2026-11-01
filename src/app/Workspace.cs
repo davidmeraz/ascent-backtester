@@ -39,7 +39,7 @@ internal static class Workspace
         return Path.Combine(workspace, "prop-firms");
     }
 
-    public static string? FindDatabentoMinuteFile(string workspace, bool adjusted = true)
+    public static string? FindDatabentoMinuteFile(string workspace, bool adjusted = false)
     {
         string fileName = adjusted ? "NQ_1min_UTC_cierre_ajustado.txt" : "NQ_1min_UTC_cierre.txt";
         foreach (string candidate in new[]
@@ -47,6 +47,36 @@ internal static class Workspace
             Path.Combine(workspace, "data", "databento", "ohlcv-1m", fileName),
             Path.Combine(workspace, "ascent-backtester", "data", "databento", "ohlcv-1m", fileName),
             Path.GetFullPath(Path.Combine(workspace, "..", "ascent-backtester", "data", "databento", "ohlcv-1m", fileName))
+        })
+        {
+            if (File.Exists(candidate)) return candidate;
+        }
+        return null;
+    }
+
+    public static string? FindDatabentoRolloversFile(string workspace)
+    {
+        const string fileName = "rollovers.json";
+        foreach (string candidate in new[]
+        {
+            Path.Combine(workspace, "data", "databento", "ohlcv-1m", fileName),
+            Path.Combine(workspace, "ascent-backtester", "data", "databento", "ohlcv-1m", fileName),
+            Path.GetFullPath(Path.Combine(workspace, "..", "ascent-backtester", "data", "databento", "ohlcv-1m", fileName))
+        })
+        {
+            if (File.Exists(candidate)) return candidate;
+        }
+        return null;
+    }
+
+    public static string? FindDatabentoTbboFile(string workspace)
+    {
+        const string fileName = "NQ_ticks_UTC_L1.txt";
+        foreach (string candidate in new[]
+        {
+            Path.Combine(workspace, "data", "databento", "tbbo", fileName),
+            Path.Combine(workspace, "ascent-backtester", "data", "databento", "tbbo", fileName),
+            Path.GetFullPath(Path.Combine(workspace, "..", "ascent-backtester", "data", "databento", "tbbo", fileName))
         })
         {
             if (File.Exists(candidate)) return candidate;
