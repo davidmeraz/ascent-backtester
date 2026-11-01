@@ -154,9 +154,15 @@ internal static class Program
     {
         if (input.Optional("input") is string specified)
             return Path.GetFullPath(specified);
-        if (Workspace.FindDatabentoMinuteFile(workspace, adjusted: true) is string defaultPath)
+        if (input.Has("ticks"))
+        {
+            if (Workspace.FindDatabentoTbboFile(workspace) is string tbboPath)
+                return tbboPath;
+            throw new ArgumentException("Falta --input y no se encontró data/databento/tbbo/NQ_ticks_UTC_L1.txt.");
+        }
+        if (Workspace.FindDatabentoMinuteFile(workspace, adjusted: false) is string defaultPath)
             return defaultPath;
-        throw new ArgumentException("Falta --input y no se encontró data/databento/ohlcv-1m/NQ_1min_UTC_cierre_ajustado.txt.");
+        throw new ArgumentException("Falta --input y no se encontró data/databento/ohlcv-1m/NQ_1min_UTC_cierre.txt.");
     }
 
     private static DateTime? ParseDateBoundaryUtc(string? text, bool inclusiveEndOfDay)
