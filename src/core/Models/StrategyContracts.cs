@@ -71,7 +71,10 @@ namespace Futures.Core
             int slowPeriod = 20,
             int quantity = 1,
             int? stopLossTicks = null,
-            int? takeProfitTicks = null)
+            int? takeProfitTicks = null,
+            int? breakEvenTriggerTicks = null,
+            int breakEvenOffsetTicks = 0,
+            int? trailingStopTicks = null)
         {
             if (fastPeriod < 1)
                 throw new ArgumentOutOfRangeException(nameof(fastPeriod), "Fast period must be at least one.");
@@ -83,12 +86,19 @@ namespace Futures.Core
                 throw new ArgumentOutOfRangeException(nameof(stopLossTicks), "Stop loss ticks must be at least one.");
             if (takeProfitTicks.HasValue && takeProfitTicks.Value < 1)
                 throw new ArgumentOutOfRangeException(nameof(takeProfitTicks), "Take profit ticks must be at least one.");
+            if (breakEvenTriggerTicks.HasValue && breakEvenTriggerTicks.Value < 1)
+                throw new ArgumentOutOfRangeException(nameof(breakEvenTriggerTicks), "Break-even trigger ticks must be at least one.");
+            if (trailingStopTicks.HasValue && trailingStopTicks.Value < 1)
+                throw new ArgumentOutOfRangeException(nameof(trailingStopTicks), "Trailing stop ticks must be at least one.");
 
             FastPeriod = fastPeriod;
             SlowPeriod = slowPeriod;
             Quantity = quantity;
             StopLossTicks = stopLossTicks;
             TakeProfitTicks = takeProfitTicks;
+            BreakEvenTriggerTicks = breakEvenTriggerTicks;
+            BreakEvenOffsetTicks = breakEvenOffsetTicks;
+            TrailingStopTicks = trailingStopTicks;
         }
 
         public int FastPeriod { get; }
@@ -96,6 +106,9 @@ namespace Futures.Core
         public int Quantity { get; }
         public int? StopLossTicks { get; }
         public int? TakeProfitTicks { get; }
+        public int? BreakEvenTriggerTicks { get; }
+        public int BreakEvenOffsetTicks { get; }
+        public int? TrailingStopTicks { get; }
     }
 
     public enum StrategySignal
@@ -111,12 +124,18 @@ namespace Futures.Core
             int targetPositionQuantity,
             string reason,
             int? stopLossTicks = null,
-            int? takeProfitTicks = null)
+            int? takeProfitTicks = null,
+            int? breakEvenTriggerTicks = null,
+            int breakEvenOffsetTicks = 0,
+            int? trailingStopTicks = null)
         {
             TargetPositionQuantity = targetPositionQuantity;
             Reason = reason ?? throw new ArgumentNullException(nameof(reason));
             StopLossTicks = stopLossTicks;
             TakeProfitTicks = takeProfitTicks;
+            BreakEvenTriggerTicks = breakEvenTriggerTicks;
+            BreakEvenOffsetTicks = breakEvenOffsetTicks;
+            TrailingStopTicks = trailingStopTicks;
         }
 
         /// <summary>The desired resulting signed position, not a buy/sell order quantity.</summary>
@@ -124,6 +143,9 @@ namespace Futures.Core
         public string Reason { get; }
         public int? StopLossTicks { get; }
         public int? TakeProfitTicks { get; }
+        public int? BreakEvenTriggerTicks { get; }
+        public int BreakEvenOffsetTicks { get; }
+        public int? TrailingStopTicks { get; }
     }
 
     public sealed class StrategySnapshot

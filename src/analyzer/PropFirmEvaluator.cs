@@ -64,7 +64,10 @@ public sealed record PropFirmEvaluationResult(
     double MaxObservedDrawdownUsd,
     double WorstDailyLossUsd,
     double BestDayProfitSharePercent,
-    string SummaryReason);
+    string SummaryReason,
+    double PeakEquityUsd = 0,
+    double MinRemainingBufferUsd = 0,
+    bool ContractLimitViolated = false);
 
 public sealed class PropFirmEvaluator
 {
@@ -96,57 +99,112 @@ public sealed class PropFirmEvaluator
         ArgumentNullException.ThrowIfNull(firm);
         ArgumentNullException.ThrowIfNull(plan);
 
+        bool isMicroInstrument = backtest.Configuration.Instrument.StartsWith("M", StringComparison.OrdinalIgnoreCase);
+        int maxAllowedContracts = isMicroInstrument ? plan.MaxMicroContracts : plan.MaxMiniContracts;
+        bool contractLimitViolated = backtest.Trades.Any(t => t.Quantity > maxAllowedContracts);
+
         var dailyPnl = new Dictionary<DateTime, double>();
         double equity = 0d;
         double peakEquity = 0d;
         double maxDrawdown = 0d;
-        bool accountBlown = false;
+        double liquidationThreshold = -plan.MaxDrawdownUsd;
+        double? maxLockedThreshold = plan.SafetyNetBufferUsd > plan.MaxDrawdownUsd
+            ? plan.SafetyNetBufferUsd - plan.MaxDrawdownUsd
+            : null;
+        double minRemainingBuffer = plan.MaxDrawdownUsd;
+        bool accountBlown = contractLimitViolated;
         bool dailyLossViolated = false;
+
+        void UpdateTrailingThreshold(double currentPeak)
+        {
+            double candidate = currentPeak - plan.MaxDrawdownUsd;
+            if (maxLockedThreshold.HasValue)
+                candidate = Math.Min(candidate, maxLockedThreshold.Value);
+            if (candidate > liquidationThreshold)
+                liquidationThreshold = candidate;
+        }
 
         foreach (var trade in backtest.Trades)
         {
             var day = trade.ExitTimeUtc.Date;
             var dayBeforeTrade = dailyPnl.GetValueOrDefault(day);
+            double entryComm = trade.Commission * 0.5;
+            double worstFloatingEquityDuringTrade = equity - trade.MaxAdverseExcursionUsd - entryComm;
+            double bestFloatingEquityDuringTrade = equity + trade.MaxFavorableExcursionUsd - entryComm;
 
             if (plan.DrawdownType == DrawdownType.IntradayTrailing)
             {
-                // Peak rises with unrealized MFE during the trade (Apex / TPT PRO rule)
-                peakEquity = Math.Max(peakEquity, equity + trade.MaxFavorableExcursionUsd);
-                var worstEquityDuringTrade = equity - trade.MaxAdverseExcursionUsd;
-                var intrabarDd = peakEquity - worstEquityDuringTrade;
-                maxDrawdown = Math.Max(maxDrawdown, intrabarDd);
-                if (intrabarDd >= plan.MaxDrawdownUsd) accountBlown = true;
+                // 1. Check adverse excursion against liquidation threshold prior to new highs in this trade
+                double bufferBeforePeak = worstFloatingEquityDuringTrade - liquidationThreshold;
+                minRemainingBuffer = Math.Min(minRemainingBuffer, Math.Max(0d, bufferBeforePeak));
+                if (bufferBeforePeak <= 0d)
+                    accountBlown = true;
+
+                // 2. Update trailing peak and liquidation threshold with MFE reached during trade
+                double ddFromPriorPeak = Math.Max(0d, peakEquity - worstFloatingEquityDuringTrade);
+                double ddWithinTrade = trade.PeakToTroughDrawdownUsd > 0d
+                    ? trade.PeakToTroughDrawdownUsd
+                    : ddFromPriorPeak;
+                double tradeEffectiveDd = Math.Max(ddFromPriorPeak, ddWithinTrade);
+                maxDrawdown = Math.Max(maxDrawdown, tradeEffectiveDd);
+
+                bool thresholdStillTrailing = !maxLockedThreshold.HasValue || liquidationThreshold < maxLockedThreshold.Value;
+                if (thresholdStillTrailing && ddWithinTrade >= plan.MaxDrawdownUsd)
+                {
+                    accountBlown = true;
+                    minRemainingBuffer = 0d;
+                }
+
+                peakEquity = Math.Max(peakEquity, bestFloatingEquityDuringTrade);
+                UpdateTrailingThreshold(peakEquity);
             }
             else if (plan.DrawdownType == DrawdownType.Static)
             {
-                var worstEquityDuringTrade = equity - trade.MaxAdverseExcursionUsd;
-                var staticDd = Math.Max(0d, -worstEquityDuringTrade);
+                var staticDd = Math.Max(0d, -worstFloatingEquityDuringTrade);
                 maxDrawdown = Math.Max(maxDrawdown, staticDd);
-                if (staticDd >= plan.MaxDrawdownUsd) accountBlown = true;
+                double buffer = plan.MaxDrawdownUsd - staticDd;
+                minRemainingBuffer = Math.Min(minRemainingBuffer, Math.Max(0d, buffer));
+                if (staticDd >= plan.MaxDrawdownUsd)
+                    accountBlown = true;
             }
 
             if (plan.DailyLossLimitUsd is double dllIntraday
-                && (dayBeforeTrade - trade.MaxAdverseExcursionUsd) <= -dllIntraday)
+                && (dayBeforeTrade - trade.MaxAdverseExcursionUsd - entryComm) <= -dllIntraday)
             {
                 dailyLossViolated = true;
-                if (plan.DailyLossType == DailyLossType.HardBreach) accountBlown = true;
+                if (plan.DailyLossType == DailyLossType.HardBreach)
+                    accountBlown = true;
             }
 
             dailyPnl[day] = dayBeforeTrade + trade.NetProfit;
             equity += trade.NetProfit;
+            peakEquity = Math.Max(peakEquity, equity);
 
             if (plan.DrawdownType == DrawdownType.IntradayTrailing)
             {
-                peakEquity = Math.Max(peakEquity, equity);
+                UpdateTrailingThreshold(peakEquity);
                 double closedDd = peakEquity - equity;
                 maxDrawdown = Math.Max(maxDrawdown, closedDd);
-                if (closedDd >= plan.MaxDrawdownUsd) accountBlown = true;
+                double bufferAtClose = equity - liquidationThreshold;
+                minRemainingBuffer = Math.Min(minRemainingBuffer, Math.Max(0d, bufferAtClose));
+                if (bufferAtClose <= 0d)
+                    accountBlown = true;
+            }
+            else if (plan.DrawdownType == DrawdownType.Static)
+            {
+                double closedStaticDd = Math.Max(0d, -equity);
+                maxDrawdown = Math.Max(maxDrawdown, closedStaticDd);
+                double buffer = plan.MaxDrawdownUsd - closedStaticDd;
+                minRemainingBuffer = Math.Min(minRemainingBuffer, Math.Max(0d, buffer));
+                if (closedStaticDd >= plan.MaxDrawdownUsd)
+                    accountBlown = true;
             }
 
             if (plan.DailyLossLimitUsd is double dll && dailyPnl[day] <= -dll)
             {
                 dailyLossViolated = true;
-                if (plan.DailyLossType == DailyLossType.HardBreach) accountBlown = true;
+                if (plan.DailyLossType == DailyLossType.HardBreach)
+                    accountBlown = true;
             }
         }
 
@@ -154,16 +212,26 @@ public sealed class PropFirmEvaluator
         {
             double eodEquity = 0d;
             double eodPeak = 0d;
+            double eodThreshold = -plan.MaxDrawdownUsd;
             foreach (var day in dailyPnl.Keys.OrderBy(d => d))
             {
                 eodEquity += dailyPnl[day];
                 eodPeak = Math.Max(eodPeak, eodEquity);
+                double candidate = eodPeak - plan.MaxDrawdownUsd;
+                if (maxLockedThreshold.HasValue)
+                    candidate = Math.Min(candidate, maxLockedThreshold.Value);
+                if (candidate > eodThreshold)
+                    eodThreshold = candidate;
+
                 double currentDd = eodPeak - eodEquity;
                 maxDrawdown = Math.Max(maxDrawdown, currentDd);
-                if (currentDd >= plan.MaxDrawdownUsd) accountBlown = true;
+                double buffer = eodEquity - eodThreshold;
+                minRemainingBuffer = Math.Min(minRemainingBuffer, Math.Max(0d, buffer));
+                if (buffer <= 0d)
+                    accountBlown = true;
             }
+            peakEquity = Math.Max(peakEquity, eodPeak);
         }
-
         int tradingDays = dailyPnl.Count;
         double worstDailyLoss = dailyPnl.Count == 0 ? 0d : Math.Min(0d, dailyPnl.Values.Min());
         double bestDayProfit = dailyPnl.Count == 0 ? 0d : Math.Max(0d, dailyPnl.Values.Max());
@@ -175,7 +243,9 @@ public sealed class PropFirmEvaluator
         bool targetReached = equity >= plan.ProfitTargetUsd;
         bool passed = !accountBlown && targetReached && minDaysOk && consistencyOk;
 
-        string reason = accountBlown ? "Cuenta quemada por límite de drawdown o pérdida diaria (Hard Breach)."
+        string reason = contractLimitViolated
+            ? $"Límite de contratos excedido (máx. {maxAllowedContracts} para {backtest.Configuration.Instrument})."
+            : accountBlown ? "Cuenta quemada por límite de drawdown o pérdida diaria (Hard Breach)."
             : !targetReached ? $"Objetivo no alcanzado ({equity:F2} / {plan.ProfitTargetUsd:F2} USD)."
             : !minDaysOk ? $"Días operados insuficientes ({tradingDays} / {firm.GeneralRules.MinTradingDaysEvaluation})."
             : !consistencyOk ? $"Regla de consistencia incumplida (mejor día {bestDayShare:F1}% > {firm.GeneralRules.EvaluationConsistencyPercent:F1}%)."
@@ -194,6 +264,9 @@ public sealed class PropFirmEvaluator
             maxDrawdown,
             worstDailyLoss,
             bestDayShare,
-            reason);
+            reason,
+            peakEquity,
+            minRemainingBuffer,
+            contractLimitViolated);
     }
 }

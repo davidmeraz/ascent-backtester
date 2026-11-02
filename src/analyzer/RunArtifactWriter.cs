@@ -32,6 +32,7 @@ public sealed class RunArtifactWriter
         Directory.CreateDirectory(output);
         WriteSignals(result, Path.Combine(output, "signals.csv"), codeHash);
         WriteTrades(result, Path.Combine(output, "trades.csv"));
+        WriteDaily(result, Path.Combine(output, "daily.csv"));
         File.WriteAllText(Path.Combine(output, "result.json"), JsonSerializer.Serialize(result, JsonOptions), new UTF8Encoding(false));
         var manifest = new
         {
@@ -74,12 +75,50 @@ public sealed class RunArtifactWriter
     private static void WriteTrades(BacktestResult result, string path)
     {
         using var writer = new StreamWriter(path, false, new UTF8Encoding(false));
-        writer.WriteLine("TradeNumber,Side,Quantity,EntryTimeUtc,EntryPrice,ExitTimeUtc,ExitPrice,GrossProfit,Commission,NetProfit,MAE_USD,MFE_USD,ExitReason");
+        writer.WriteLine("TradeNumber,Side,Quantity,EntryTimeUtc,EntryPrice,ExitTimeUtc,ExitPrice,GrossProfit,Commission,NetProfit,MAE_USD,MFE_USD,ExitReason,Points,Ticks,DurationSeconds,InitialRiskUsd,RMultiple,MfeCaptureRatio,PeakToTroughDD_USD,CumulativeNetProfit");
         foreach (var t in result.Trades)
-            writer.WriteLine(string.Join(",", t.TradeNumber.ToString(CultureInfo.InvariantCulture), t.Side, t.Quantity.ToString(CultureInfo.InvariantCulture),
-                t.EntryTimeUtc.ToString("O", CultureInfo.InvariantCulture), Number(t.EntryPrice), t.ExitTimeUtc.ToString("O", CultureInfo.InvariantCulture),
-                Number(t.ExitPrice), Number(t.GrossProfit), Number(t.Commission), Number(t.NetProfit),
-                Number(t.MaxAdverseExcursionUsd), Number(t.MaxFavorableExcursionUsd), Csv(t.ExitReason)));
+            writer.WriteLine(string.Join(",",
+                t.TradeNumber.ToString(CultureInfo.InvariantCulture),
+                t.Side,
+                t.Quantity.ToString(CultureInfo.InvariantCulture),
+                t.EntryTimeUtc.ToString("O", CultureInfo.InvariantCulture),
+                Number(t.EntryPrice),
+                t.ExitTimeUtc.ToString("O", CultureInfo.InvariantCulture),
+                Number(t.ExitPrice),
+                Number(t.GrossProfit),
+                Number(t.Commission),
+                Number(t.NetProfit),
+                Number(t.MaxAdverseExcursionUsd),
+                Number(t.MaxFavorableExcursionUsd),
+                Csv(t.ExitReason),
+                Number(t.Points),
+                Number(t.Ticks),
+                Number(t.DurationSeconds),
+                NullableNumber(t.InitialRiskUsd),
+                NullableNumber(t.RMultiple),
+                NullableNumber(t.MfeCaptureRatio),
+                Number(t.PeakToTroughDrawdownUsd),
+                Number(t.CumulativeNetProfitUsd)));
+    }
+
+    private static void WriteDaily(BacktestResult result, string path)
+    {
+        if (result.DailyPerformance is null) return;
+        using var writer = new StreamWriter(path, false, new UTF8Encoding(false));
+        writer.WriteLine("DateUtc,Trades,WinningTrades,LosingTrades,GrossProfit,Commission,NetProfit,CumulativeNetProfit,IntradayPeakEquity,MaxIntradayDrawdown,EndOfDayDrawdown");
+        foreach (var d in result.DailyPerformance)
+            writer.WriteLine(string.Join(",",
+                d.DateUtc.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                d.Trades.ToString(CultureInfo.InvariantCulture),
+                d.WinningTrades.ToString(CultureInfo.InvariantCulture),
+                d.LosingTrades.ToString(CultureInfo.InvariantCulture),
+                Number(d.GrossProfit),
+                Number(d.Commission),
+                Number(d.NetProfit),
+                Number(d.CumulativeNetProfit),
+                Number(d.IntradayPeakEquity),
+                Number(d.MaxIntradayDrawdown),
+                Number(d.EndOfDayDrawdown)));
     }
 
     private static string Number(double number) => number.ToString("G17", CultureInfo.InvariantCulture);

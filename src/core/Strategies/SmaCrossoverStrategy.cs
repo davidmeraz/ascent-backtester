@@ -90,7 +90,10 @@ namespace Futures.Core
                     direction * Parameters.Quantity,
                     "SMA crossing entry",
                     Parameters.StopLossTicks,
-                    Parameters.TakeProfitTicks);
+                    Parameters.TakeProfitTicks,
+                    Parameters.BreakEvenTriggerTicks,
+                    Parameters.BreakEvenOffsetTicks,
+                    Parameters.TrailingStopTicks);
             if (Math.Sign(context.PositionQuantity) != direction)
                 return new OrderIntent(0, "Opposite SMA crossing exit");
             return null;
