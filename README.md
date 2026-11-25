@@ -2,13 +2,15 @@
 
 Motor de backtesting cuantitativo y analizador profesional en C# (.NET 10 / .NET Framework 4.8) para estrategias de futuros (**NQ**, **MNQ**, **ES** y **MES**) y evaluación exacta de reglas de empresas de fondeo.
 
+Guía de los históricos locales de Databento (organizados por instrumento y particionados por año/mes): [data/databento/README.md](data/databento/README.md). La aplicación detecta automáticamente `data/databento/<INSTRUMENTO>/tbbo/ticks/` y `ohlcv-1m/`.
+
 ## Capacidades principales
 
 1. **Instrumentos Mini y Micro (`ES`, `NQ`, `MES`, `MNQ`)**: Especificación de tick, valor por punto y detección de contratos micro en [`InstrumentSpec`](src/core/Models/InstrumentSpec.cs).
 2. **Contrato genérico `IStrategy` e Indicadores con Paridad NinjaTrader (`Futures.Core`)**:
    - [`AnchoredVwap`](src/core/Indicators/AnchoredVwap.cs): VWAP anclado por sesión UTC con bandas $\sigma$, pendiente canónica (`SlopeLookbackBars`) y filtro de extensión (`ExtendedDistancePoints`), con paridad exacta respecto a `dav3e_vwap`.
    - [`WilderAtr`](src/core/Indicators/WilderAtr.cs): ATR con suavizado de Wilder continuo en barras cerradas, con paridad exacta respecto a `dav3e_hud`.
-   - [`VwapDeltaPullbackStrategy`](src/core/Strategies/VwapDeltaPullbackStrategy.cs) y [`SmaCrossoverStrategy`](src/core/Strategies/SmaCrossoverStrategy.cs).
+   - [`SmaCrossoverStrategy`](src/core/Strategies/SmaCrossoverStrategy.cs): Cruce configurable de medias móviles con ejecución en cierre de barra.
 3. **Ejecución por Minuto y Tick-by-Tick Realista ([`BacktestRunner`](src/analyzer/BacktestRunner.cs))**:
    - **Minuto (`NinjaTraderMinuteImporter`)**: Evalúa Stop Loss y Take Profit intravela aplicando la regla pesimista **"Stop primero"**, llenado consciente de *gaps* en la apertura (`bar.Open`), y recorrido cronológico intravela según polaridad de vela.
    - **Tick-by-Tick (`NinjaTraderTickImporter` + [`Tick`](src/core/Models/Tick.cs))**: Lee flujos Level 1 (`Last`, `Bid`, `Ask`), agrega métricas de *Order Flow* (`DeltaVolume`, `DeltaRatio`, `AskVolume`, `BidVolume`, `TickCount`) en cada [`Bar`](src/core/Models/Bar.cs), llena órdenes contra `Bid`/`Ask` más *slippage* y aplica reglas de sesión y pérdida diaria al milisegundo.

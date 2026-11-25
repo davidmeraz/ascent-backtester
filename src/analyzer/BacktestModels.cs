@@ -25,6 +25,7 @@ public sealed class BacktestRequest
     public double? MaxDailyLossUsd { get; init; }
     public int? MaxTradesPerDay { get; init; }
     public bool LiquidateOnDailyLossBreach { get; init; } = true;
+    public IProgress<double>? Progress { get; init; }
 }
 
 public sealed record SignalTrace(

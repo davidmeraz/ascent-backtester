@@ -55,6 +55,7 @@ def request_public_quote(parameters):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--simbolo", default=SYMBOL, help="Símbolo continuo en Databento (por defecto NQ.v.0; ej. ES.v.0).")
     parser.add_argument("--inicio", default="2016-01-01", help="Primer día UTC, incluido (AAAA-MM-DD).")
     parser.add_argument("--fin", default="2026-01-01", help="Último día UTC, excluido (AAAA-MM-DD).")
     parser.add_argument("--cuenta", action="store_true", help="Usar la API autenticada para obtener una cotización de la cuenta.")
@@ -75,12 +76,12 @@ def main():
 
     common = {
         "dataset": DATASET,
-        "symbols": SYMBOL,
+        "symbols": args.simbolo,
         "stype_in": "continuous",
         "start": start.isoformat(),
         "end": end.isoformat(),
     }
-    print(f"NQ continuo por volumen | UTC [{start}, {end}) | {DATASET}")
+    print(f"{args.simbolo} continuo por volumen | UTC [{start}, {end}) | {DATASET}")
     print("Solo consulta cotizaciones: no descarga datos ni compra nada.")
     print("Fuente:", "API autenticada" if args.cuenta else "calculadora pública", "\n")
     try:

@@ -24,7 +24,7 @@ internal sealed class Arguments
             string name = arg.Substring(2);
             if (values.ContainsKey(name) || switches.Contains(name))
                 throw new ArgumentException("Opción repetida: --" + name);
-            if (name is "json" or "draft" or "context" or "help" or "ticks")
+            if (name is "json" or "draft" or "context" or "help" or "ticks" or "adjusted")
                 switches.Add(name);
             else
             {

@@ -9,7 +9,7 @@
   "quoted_cost_usd": 20.295233055949,
   "billable_size_bytes": 311312008,
   "created_utc": "2026-10-31T19:47:40.923065+00:00",
-  "source_file": "fuente-databento.csv.zst",
+  "source_file": "raw/20100606-20261030.ohlcv-1m.csv.zst",
   "source_sha256": "9f7a783069f74f86dac1a3ed8d1dd1f3141a3f2e76c4f2a62729a22127b3bece",
   "bar_count": 5559143,
   "skipped_invalid_rows": 0,
@@ -21,5 +21,6 @@
   "unadjusted_sha256": "2ad6ad9704fb91dfec840998b17b20b9bd0e52de49308d53cc7ebf07d7f81722",
   "adjusted_file": "NQ_1min_UTC_cierre_ajustado.txt",
   "adjusted_sha256": "63e593b5c6b09716a15a15f787dba320b61438ea045a72b2b79d712705faabc9",
-  "rollovers_file": "rollovers.json"
+  "rollovers_file": "rollovers.json",
+  "instrument": "NQ"
 }

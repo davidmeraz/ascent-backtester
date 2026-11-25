@@ -88,8 +88,10 @@ internal static class DatasetDateCatalog
         lock (initLock)
         {
             if (isInitialized) return;
-            LoadDates(workspacePath, "ohlcv-1m", ohlcvDates, "NQ_1min_UTC_cierre.txt");
-            LoadDates(workspacePath, "tbbo", tbboDates, "NQ_1min_UTC_cierre.txt");
+            LoadDates(workspacePath, "ohlcv-1m", ohlcvDates,
+                Workspace.FindDatabentoMinuteFile(workspacePath, adjusted: false) ?? "NQ_1min_UTC_cierre.txt");
+            LoadDates(workspacePath, "tbbo", tbboDates,
+                Workspace.FindDatabentoTbboMinuteFile(workspacePath) ?? "NQ_1min_UTC_cierre.txt");
             isInitialized = true;
         }
     }
@@ -98,7 +100,9 @@ internal static class DatasetDateCatalog
     {
         try
         {
-            string cachePath = Path.Combine(workspacePath, "data", "databento", schema, "dates_cache.json");
+            string txtPath = Path.IsPathRooted(fallbackTxt) ? fallbackTxt
+                : Path.Combine(workspacePath, "data", "databento", "NQ", schema, fallbackTxt);
+            string cachePath = Path.Combine(Path.GetDirectoryName(txtPath)!, "dates_cache.json");
             if (File.Exists(cachePath))
             {
                 string json = File.ReadAllText(cachePath);
@@ -110,7 +114,6 @@ internal static class DatasetDateCatalog
                 }
             }
 
-            string txtPath = Path.Combine(workspacePath, "data", "databento", schema, fallbackTxt);
             if (File.Exists(txtPath))
             {
                 using var reader = new StreamReader(txtPath);
@@ -121,8 +124,16 @@ internal static class DatasetDateCatalog
                 {
                     if (line.Length >= 8 && int.TryParse(line.AsSpan(0, 8), out int d) && d != last)
                     {
-                        targetSet.Add(d);
-                        list.Add(d);
+                        // Las velas TBBO se marcan por cierre; el calendario muestra el día del intervalo.
+                        if (schema == "tbbo" && line.Length >= 15 && DateTime.TryParseExact(
+                            line.AsSpan(0, 15), "yyyyMMdd HHmmss", CultureInfo.InvariantCulture,
+                            DateTimeStyles.None, out DateTime close))
+                        {
+                            DateTime start = close.AddMinutes(-1);
+                            d = start.Year * 10000 + start.Month * 100 + start.Day;
+                        }
+                        if (d == last) continue;
+                        if (targetSet.Add(d)) list.Add(d);
                         last = d;
                     }
                 }
@@ -148,7 +159,7 @@ internal static class DatasetDateCatalog
         catch { return false; }
         if (dt.DayOfWeek == DayOfWeek.Saturday) return false;
         DateTime min = new(2010, 6, 7, 0, 0, 0, DateTimeKind.Utc);
-        DateTime max = tbbo ? new(2016, 9, 21, 0, 0, 0, DateTimeKind.Utc) : new(2026, 10, 30, 0, 0, 0, DateTimeKind.Utc);
+        DateTime max = LastDate(tbbo);
         return dt >= min && dt <= max;
     }
 
@@ -164,7 +175,7 @@ internal static class DatasetDateCatalog
             return false;
         }
         DateTime min = new(2010, 6, 7, 0, 0, 0, DateTimeKind.Utc);
-        DateTime max = tbbo ? new(2016, 9, 21, 0, 0, 0, DateTimeKind.Utc) : new(2026, 10, 30, 0, 0, 0, DateTimeKind.Utc);
+        DateTime max = LastDate(tbbo);
         DateTime mStart = new(year, month, 1, 0, 0, 0, DateTimeKind.Utc);
         DateTime mEnd = new(year, month, DateTime.DaysInMonth(year, month), 0, 0, 0, DateTimeKind.Utc);
         return mEnd >= min && mStart <= max;
@@ -172,9 +183,23 @@ internal static class DatasetDateCatalog
 
     public static bool HasYear(bool tbbo, int year)
     {
-        DateTime min = new(2010, 6, 7, 0, 0, 0, DateTimeKind.Utc);
-        DateTime max = tbbo ? new(2016, 9, 21, 0, 0, 0, DateTimeKind.Utc) : new(2026, 10, 30, 0, 0, 0, DateTimeKind.Utc);
-        return year >= min.Year && year <= max.Year;
+        var dates = tbbo ? tbboDates : ohlcvDates;
+        return dates.Count > 0 ? dates.Any(d => d / 10000 == year)
+            : year >= FirstDate(tbbo).Year && year <= LastDate(tbbo).Year;
+    }
+
+    public static DateTime FirstDate(bool tbbo) => DateBound(tbbo, first: true);
+    public static DateTime LastDate(bool tbbo) => DateBound(tbbo, first: false);
+
+    private static DateTime DateBound(bool tbbo, bool first)
+    {
+        var dates = tbbo ? tbboDates : ohlcvDates;
+        if (dates.Count == 0)
+            return first ? new DateTime(2010, 6, 7, 0, 0, 0, DateTimeKind.Utc)
+                : tbbo ? new DateTime(2018, 6, 26, 0, 0, 0, DateTimeKind.Utc)
+                : new DateTime(2026, 10, 30, 0, 0, 0, DateTimeKind.Utc);
+        int key = first ? dates.Min() : dates.Max();
+        return new DateTime(key / 10000, key / 100 % 100, key % 100, 0, 0, 0, DateTimeKind.Utc);
     }
 }
 
@@ -220,15 +245,21 @@ internal sealed class MainWindow : Window
     private readonly string defaultDatasetPath;
     private readonly string adjustedDatasetPath;
     private readonly string tbboDatasetPath;
+    private readonly string tbboMinuteDatasetPath;
     private readonly string? rolloversFilePath;
 
     // Controles de navegación del menú inferior
     private readonly Button navChartBtn;
     private readonly Button navRolloversBtn;
     private readonly Button navAnalyzerBtn;
+    private readonly Button navPropFirmBtn;
     private readonly Button navSchemaBtn;
     private readonly Button navDateTfBtn;
     private readonly Button navConfigBtn;
+    private readonly Button navAnalyzerDateBtn;
+    private readonly Button navAnalyzerStrategyBtn;
+    private readonly Button navAnalyzerRiskBtn;
+    private readonly Button navAnalyzerRunBtn;
 
     // Ventana flotante modal centrada
     private readonly Grid modalOverlay;
@@ -238,6 +269,7 @@ internal sealed class MainWindow : Window
     private readonly Control chartPageView;
     private readonly Control rolloversPageView;
     private readonly Control analyzerPageView;
+    private readonly Control propFirmPageView;
 
     // Controles Página 1: Gráfico e interacciones
     private readonly ComboBox schemaBox;
@@ -317,13 +349,97 @@ internal sealed class MainWindow : Window
     private TextBlock? kpiDaysVal;
     private TextBlock? kpiDaysSub;
     private EquityCurveSurface? btEquitySurface;
-    private StackPanel? btPropFirmsRows;
-    private StackPanel? btTradesRows;
-    private Control? btPropFirmsContainer;
+    private TextBlock? btGraphFinalNetText;
+    private TextBlock? btGraphPeakText;
+    private TextBlock? btGraphMaxDdText;
+    private TextBlock? btGraphWinRateText;
+
+    // Vistas estilo NinjaTrader Strategy Analyzer
+    private Control? btSummaryContainer;
+    private Control? btGraphContainer;
     private Control? btTradesContainer;
-    private Button? btTabPropFirmsBtn;
+    private Control? btPeriodsContainer;
+    private Control? btMetricsContainer;
+
+    private Button? btTabSummaryBtn;
+    private Button? btTabGraphBtn;
     private Button? btTabTradesBtn;
+    private Button? btTabPeriodsBtn;
+    private Button? btTabMetricsBtn;
+
+    // Vistas Página 4: Simulador Multi-Cuenta Prop Firm
+    private Control? pfSimContainer;
+    private Control? pfCostContainer;
+    private Control? pfRulesContainer;
+
+    private Button? pfTabSimBtn;
+    private Button? pfTabCostBtn;
+    private Button? pfTabRulesBtn;
+
+    // Controles Simulador Multi-Cuenta Prop Firm
+    private ComboBox? pfPlanCombo;
+    private ComboBox? pfStrategyModeCombo;
+    private ComboBox? pfAccountsCountCombo;
+    private TextBox? pfAccountPriceBox;
+    private TextBox? pfActivationPriceBox;
+    private TextBlock? pfKpiEvalPassVal;
+    private TextBlock? pfKpiEvalPassSub;
+    private TextBlock? pfKpiPayoutPassVal;
+    private TextBlock? pfKpiPayoutPassSub;
+    private TextBlock? pfKpiTotalWithdrawnVal;
+    private TextBlock? pfKpiTotalWithdrawnSub;
+    private TextBlock? pfKpiTotalCostVal;
+    private TextBlock? pfKpiTotalCostSub;
+    private TextBlock? pfKpiNetRoiVal;
+    private TextBlock? pfKpiNetRoiSub;
+    private StackPanel? pfAccountsTableRows;
+    private TextBlock? pfEvText;
+    private TextBlock? pfVerdictText;
+    private Border? pfPassBarFill;
+    private Border? pfPayoutBarFill;
+    private Border? pfBlownBarFill;
+    private TextBlock? pfDistributionLegend;
+    private Grid? pfDistTrack;
+    private StackPanel? pfCostTableRows;
+    private TextBlock? pfCostTitleText;
+
+    private DailyTradesChartSurface? btDailyTradesSurface;
+    private TextBlock? metAvgTradesDayVal;
+    private TextBlock? metAvgTradesDaySub;
+    private TextBlock? metExtremesTradesVal;
+    private TextBlock? metExtremesTradesSub;
+    private TextBlock? metAvgPnlDayVal;
+    private TextBlock? metAvgPnlDaySub;
+    private TextBlock? metWinningDaysVal;
+    private TextBlock? metWinningDaysSub;
+    private TextBlock? metAvgDurationVal;
+    private TextBlock? metAvgDurationSub;
+    private StackPanel? metDowStack;
+    private StackPanel? metFreqBucketsStack;
+    private TextBlock? metBestDayVal;
+    private TextBlock? metBestDaySub;
+    private TextBlock? metWorstDayVal;
+    private TextBlock? metWorstDaySub;
+    private TextBlock? metAvgIntradayDdVal;
+    private TextBlock? metAvgIntradayDdSub;
+    private TextBlock? metCommImpactVal;
+    private TextBlock? metCommImpactSub;
+    private BacktestResult? lastBacktestResult;
+
+    private StackPanel? btSummaryRows;
+    private StackPanel? btPeriodsRows;
+    private StackPanel? btTradesRows;
     private bool isRunningBacktest;
+
+    private IReadOnlyList<TradeRecord> currentAllTrades = Array.Empty<TradeRecord>();
+    private int tradesCurrentPage;
+    private const int TradesPageSize = 500;
+    private TextBlock? btTradesPageInfoText;
+    private Button? btTradesPrevBtn;
+    private Button? btTradesNextBtn;
+    private Button? btTradesFirstBtn;
+    private Button? btTradesLastBtn;
+    private ProgressBar? btProgressBar;
 
     private IReadOnlyList<Bar> rawMinuteBars = Array.Empty<Bar>();
     private IReadOnlyList<Tick> rawTicks = Array.Empty<Tick>();
@@ -336,11 +452,13 @@ internal sealed class MainWindow : Window
     {
         workspaceRoot = workspacePath;
         defaultDatasetPath = Workspace.FindDatabentoMinuteFile(workspacePath, adjusted: false)
-            ?? Path.Combine(workspacePath, "data", "databento", "ohlcv-1m", "NQ_1min_UTC_cierre.txt");
+            ?? Path.Combine(workspacePath, "data", "databento", "NQ", "ohlcv-1m", "NQ_1min_UTC_cierre.txt");
         adjustedDatasetPath = Workspace.FindDatabentoMinuteFile(workspacePath, adjusted: true)
-            ?? Path.Combine(workspacePath, "data", "databento", "ohlcv-1m", "NQ_1min_UTC_cierre_ajustado.txt");
+            ?? Path.Combine(workspacePath, "data", "databento", "NQ", "ohlcv-1m", "NQ_1min_UTC_cierre_ajustado.txt");
         tbboDatasetPath = Workspace.FindDatabentoTbboFile(workspacePath)
-            ?? Path.Combine(workspacePath, "data", "databento", "tbbo", "NQ_ticks_UTC_L1.txt");
+            ?? Path.Combine(workspacePath, "data", "databento", "NQ", "tbbo", "ticks");
+        tbboMinuteDatasetPath = Workspace.FindDatabentoTbboMinuteFile(workspacePath)
+            ?? Path.Combine(workspacePath, "data", "databento", "NQ", "tbbo", "NQ_1min_UTC_cierre.txt");
         rolloversFilePath = Workspace.FindDatabentoRolloversFile(workspacePath);
 
         DatasetDateCatalog.Initialize(workspacePath);
@@ -383,14 +501,19 @@ internal sealed class MainWindow : Window
             out timelineSlider,
             out timelinePositionBadge,
             out chartSurface,
-            out modalViews);
+            out var chartModalViews);
 
         rolloversPageView = BuildRolloversPage(
             out rolloverTableRows,
             out rolloverChartSurface,
             out sortToggleBtn);
 
-        analyzerPageView = BuildAnalyzerPage();
+        analyzerPageView = BuildAnalyzerPage(
+            out var analyzerDateModal,
+            out var analyzerStrategyModal,
+            out var analyzerRiskModal);
+
+        propFirmPageView = BuildPropFirmPage();
 
         var pageContainer = new Grid
         {
@@ -399,6 +522,7 @@ internal sealed class MainWindow : Window
         pageContainer.Children.Add(chartPageView);
         pageContainer.Children.Add(rolloversPageView);
         pageContainer.Children.Add(analyzerPageView);
+        pageContainer.Children.Add(propFirmPageView);
         Grid.SetRow(pageContainer, 1);
         outerGrid.Children.Add(pageContainer);
 
@@ -407,9 +531,14 @@ internal sealed class MainWindow : Window
             out navChartBtn,
             out navRolloversBtn,
             out navAnalyzerBtn,
+            out navPropFirmBtn,
             out navSchemaBtn,
             out navDateTfBtn,
-            out navConfigBtn);
+            out navConfigBtn,
+            out navAnalyzerDateBtn,
+            out navAnalyzerStrategyBtn,
+            out navAnalyzerRiskBtn,
+            out navAnalyzerRunBtn);
         Grid.SetRow(bottomMenu, 2);
         outerGrid.Children.Add(bottomMenu);
 
@@ -417,7 +546,20 @@ internal sealed class MainWindow : Window
         navDateTfBtn.Click += (_, _) => { SwitchPage(0); OpenModal(1); };
         navConfigBtn.Click += (_, _) => OpenModal(2);
 
+        navAnalyzerDateBtn.Click += (_, _) => OpenModal(3);
+        navAnalyzerStrategyBtn.Click += (_, _) => OpenModal(4);
+        navAnalyzerRiskBtn.Click += (_, _) => OpenModal(5);
+        navAnalyzerRunBtn.Click += async (_, _) => await RunInteractiveBacktestAsync();
+
         // === 4. CAPA MODAL CENTRADA FLOTANTE ===
+        modalViews = new Control[6];
+        modalViews[0] = chartModalViews[0];
+        modalViews[1] = chartModalViews[1];
+        modalViews[2] = chartModalViews[2];
+        modalViews[3] = analyzerDateModal;
+        modalViews[4] = analyzerStrategyModal;
+        modalViews[5] = analyzerRiskModal;
+
         var modalContentHolder = new Grid();
         for (int i = 0; i < modalViews.Length; i++)
         {
@@ -488,6 +630,7 @@ internal sealed class MainWindow : Window
         chartPageView.IsVisible = pageIndex == 0;
         rolloversPageView.IsVisible = pageIndex == 1;
         analyzerPageView.IsVisible = pageIndex == 2;
+        propFirmPageView.IsVisible = pageIndex == 3;
 
         navChartBtn.Background = pageIndex == 0 ? SolidColorBrush.Parse("#FFFFFF") : Brushes.Transparent;
         navChartBtn.Foreground = SolidColorBrush.Parse(pageIndex == 0 ? "#09090B" : "#A1A1AA");
@@ -497,6 +640,25 @@ internal sealed class MainWindow : Window
 
         navAnalyzerBtn.Background = pageIndex == 2 ? SolidColorBrush.Parse("#FFFFFF") : Brushes.Transparent;
         navAnalyzerBtn.Foreground = SolidColorBrush.Parse(pageIndex == 2 ? "#09090B" : "#A1A1AA");
+
+        navPropFirmBtn.Background = pageIndex == 3 ? SolidColorBrush.Parse("#FFFFFF") : Brushes.Transparent;
+        navPropFirmBtn.Foreground = SolidColorBrush.Parse(pageIndex == 3 ? "#09090B" : "#A1A1AA");
+
+        bool isChart = pageIndex == 0;
+        bool isAnalyzer = pageIndex == 2;
+
+        navSchemaBtn.IsVisible = isChart;
+        navDateTfBtn.IsVisible = isChart;
+
+        navAnalyzerDateBtn.IsVisible = isAnalyzer;
+        navAnalyzerStrategyBtn.IsVisible = isAnalyzer;
+        navAnalyzerRiskBtn.IsVisible = isAnalyzer;
+        navAnalyzerRunBtn.IsVisible = isAnalyzer;
+
+        if (pageIndex == 3 && pfAccountsTableRows != null && pfAccountsTableRows.Children.Count == 0)
+        {
+            RunPropFirmSimulation();
+        }
     }
 
     private void OpenModal(int viewIndex)
@@ -661,11 +823,16 @@ internal sealed class MainWindow : Window
         out Button chartTabBtn,
         out Button rolloversTabBtn,
         out Button analyzerTabBtn,
+        out Button propFirmTabBtn,
         out Button schemaBtn,
         out Button dateTfBtn,
-        out Button configBtn)
+        out Button configBtn,
+        out Button analyzerDateBtn,
+        out Button analyzerStrategyBtn,
+        out Button analyzerRiskBtn,
+        out Button analyzerRunBtn)
     {
-        // 1. Herramientas del gráfico (extremo izquierdo)
+        // 1. Herramientas del gráfico y analizador (extremo izquierdo)
         var leftGroup = new StackPanel
         {
             Orientation = Orientation.Horizontal,
@@ -676,8 +843,25 @@ internal sealed class MainWindow : Window
         schemaBtn = MakeBottomNavButton("Esquema");
         dateTfBtn = MakeBottomNavButton("Fecha y Temporalidad");
 
+        analyzerDateBtn = MakeBottomNavButton("Fecha");
+        analyzerStrategyBtn = MakeBottomNavButton("Estrategia");
+        analyzerRiskBtn = MakeBottomNavButton("Gestión de Riesgo");
+        analyzerRunBtn = MakeBottomNavButton("Ejecutar");
+        analyzerRunBtn.Background = SolidColorBrush.Parse("#FFFFFF");
+        analyzerRunBtn.Foreground = SolidColorBrush.Parse("#09090B");
+        analyzerRunBtn.FontWeight = FontWeight.Bold;
+
+        analyzerDateBtn.IsVisible = false;
+        analyzerStrategyBtn.IsVisible = false;
+        analyzerRiskBtn.IsVisible = false;
+        analyzerRunBtn.IsVisible = false;
+
         leftGroup.Children.Add(schemaBtn);
         leftGroup.Children.Add(dateTfBtn);
+        leftGroup.Children.Add(analyzerDateBtn);
+        leftGroup.Children.Add(analyzerStrategyBtn);
+        leftGroup.Children.Add(analyzerRiskBtn);
+        leftGroup.Children.Add(analyzerRunBtn);
 
         // 2. Pestañas centrales de navegación (las más importantes)
         var menuButtonsStack = new StackPanel
@@ -724,9 +908,22 @@ internal sealed class MainWindow : Window
         };
         analyzerTabBtn.Click += (_, _) => SwitchPage(2);
 
+        propFirmTabBtn = new Button
+        {
+            Content = "Prop Firm",
+            FontWeight = FontWeight.SemiBold,
+            FontSize = 12,
+            Padding = new Thickness(20, 6),
+            BorderThickness = new Thickness(0),
+            CornerRadius = new CornerRadius(6),
+            Cursor = new Cursor(StandardCursorType.Hand)
+        };
+        propFirmTabBtn.Click += (_, _) => SwitchPage(3);
+
         menuButtonsStack.Children.Add(chartTabBtn);
         menuButtonsStack.Children.Add(rolloversTabBtn);
         menuButtonsStack.Children.Add(analyzerTabBtn);
+        menuButtonsStack.Children.Add(propFirmTabBtn);
 
         var dockBorder = new Border
         {
@@ -817,7 +1014,7 @@ internal sealed class MainWindow : Window
             ItemsSource = new[]
             {
                 "ohlcv-1m · Velas 1 Minuto (2010–2026)",
-                "tbbo · Ticks L1 Bid/Ask (2010–2016)"
+                $"tbbo · Ticks L1 Bid/Ask ({TbboYearRange})"
             },
             SelectedIndex = 1,
             HorizontalAlignment = HorizontalAlignment.Stretch,
@@ -829,7 +1026,7 @@ internal sealed class MainWindow : Window
 
         coverageText = new TextBlock
         {
-            Text = "Cobertura TBBO: 2010-06-07 a 2016-09-21 UTC (229.8M ticks)",
+            Text = TbboCoverage,
             Foreground = SolidColorBrush.Parse("#71717A"),
             FontSize = 10.5
         };
@@ -1052,7 +1249,7 @@ internal sealed class MainWindow : Window
                 Labeled("Esquema Databento activo", schemaCombo),
                 new TextBlock
                 {
-                    Text = "• Esquema ohlcv-1m: Velas históricas completas de 1 minuto (2010 a 2026).\n• Esquema tbbo: Ticks con bid/ask exacto y cálculo de delta de volumen (2010 a 2016).",
+                    Text = $"• Esquema ohlcv-1m: Velas históricas de 1 minuto (2010 a 2026).\n• Esquema tbbo: Operaciones con bid/ask y cálculo de delta de volumen ({TbboYearRange}).",
                     Foreground = SolidColorBrush.Parse("#71717A"),
                     FontSize = 10.5,
                     TextWrapping = TextWrapping.Wrap,
@@ -1540,24 +1737,19 @@ internal sealed class MainWindow : Window
         await LoadMarketDataAsync();
     }
 
-    private Control BuildAnalyzerPage()
+    private Control BuildAnalyzerPage(
+        out Control dateModalView,
+        out Control strategyModalView,
+        out Control riskModalView)
     {
-        var bodyGrid = new Grid
-        {
-            ColumnDefinitions = new ColumnDefinitions("315,14,*")
-        };
-
-        var sidebarScroll = new ScrollViewer
-        {
-            VerticalScrollBarVisibility = ScrollBarVisibility.Auto
-        };
-        var sidebarStack = new StackPanel { Spacing = 10, Margin = new Thickness(0, 0, 4, 0) };
-
+        // 1. Inicialización de inputs y selectores
         btStrategyBox = new ComboBox
         {
             ItemsSource = new[]
             {
-                "VwapDeltaPullback (VWAP + ATR + Delta)",
+                "Entradas Aleatorias (1:1 Ratio · 50% Win Rate)",
+                "Dubins-Savage (Bold Play · 1 Trade/Día · Bloques $1,000)",
+                "El Arte de la Reversión (Estocástico 20,5,5 · 2 Balas DCA)",
                 "SmaCrossover (Cruce SMA Rápida/Lenta)"
             },
             SelectedIndex = 0,
@@ -1587,9 +1779,10 @@ internal sealed class MainWindow : Window
         {
             ItemsSource = new[]
             {
+                $"TBBO 1m · Barras Derivadas L1 ({TbboYearRange})",
+                $"TBBO Ticks L1 · Bid/Ask ({TbboYearRange})",
                 "OHLCV 1m · Serie Original (2010–2026)",
-                "OHLCV 1m · Serie Back-Adjusted (2010–2026)",
-                "TBBO Ticks L1 · Bid/Ask Exacto (2010–2016)"
+                "OHLCV 1m · Serie Back-Adjusted (2010–2026)"
             },
             SelectedIndex = 0,
             HorizontalAlignment = HorizontalAlignment.Stretch,
@@ -1602,99 +1795,310 @@ internal sealed class MainWindow : Window
         btFastBox = MakeInput("10", "10");
         btSlowBox = MakeInput("20", "20");
 
-        sidebarStack.Children.Add(MakeSidebarCard("1. ESTRATEGIA E INSTRUMENTO", "#FFFFFF", new Control[]
-        {
-            Labeled("Estrategia activa (Core)", btStrategyBox),
-            Labeled("Instrumento y Valor por Punto", btInstrumentBox),
-            Labeled("Fuente de datos histórica", btDataModeBox),
-            TwoColumn(
-                Labeled("Contratos", btQtyBox),
-                TwoColumn(Labeled("SMA Ráp.", btFastBox), Labeled("SMA Lenta", btSlowBox)))
-        }));
-
-        btFromBox = MakeInput("2026-10-01", "YYYY-MM-DD");
-        btToBox = MakeInput("2026-10-30", "YYYY-MM-DD");
+        btFromBox = MakeInput("2010-06-07", "YYYY-MM-DD");
+        btToBox = MakeInput(MaxTbboDatasetDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), "YYYY-MM-DD");
         btSessionStartBox = MakeInput("13:30", "HH:mm");
         btSessionEndBox = MakeInput("20:59", "HH:mm");
 
-        sidebarStack.Children.Add(MakeSidebarCard("2. PERIODO Y SESIÓN OPERATIVA", "#FFFFFF", new Control[]
-        {
-            TwoColumn(
-                Labeled("Desde (UTC)", btFromBox),
-                Labeled("Hasta (UTC)", btToBox)),
-            TwoColumn(
-                Labeled("Inicio Sesión UTC", btSessionStartBox),
-                Labeled("Cierre Sesión UTC", btSessionEndBox))
-        }));
-
-        btSlTicksBox = MakeInput("", "Vacío = 1.5x ATR");
-        btTpTicksBox = MakeInput("", "Vacío = 2.5x ATR");
+        btSlTicksBox = MakeInput("40", "Ticks (ej: 40)");
+        btTpTicksBox = MakeInput("40", "Ticks (ej: 40)");
         btBeTriggerBox = MakeInput("", "Ticks (opcional)");
         btBeOffsetBox = MakeInput("2", "Ticks");
         btTrailTicksBox = MakeInput("", "Ticks (opcional)");
-        btCommBox = MakeInput("2.10", "USD/lado");
-        btSlippageBox = MakeInput("1", "Ticks");
+        btCommBox = MakeInput("2.05", "USD/lado");
+        btSlippageBox = MakeInput("0", "Ticks");
         btMaxDailyLossBox = MakeInput("1500", "USD");
         btMaxDailyTradesBox = MakeInput("4", "Máx/día");
 
-        btRunBtn = new Button
+        btStrategyBox.SelectionChanged += (_, _) =>
         {
-            Content = "▶  Ejecutar Analizador & Evaluación",
-            HorizontalAlignment = HorizontalAlignment.Stretch,
-            HorizontalContentAlignment = HorizontalAlignment.Center,
-            Background = SolidColorBrush.Parse("#FFFFFF"),
-            Foreground = SolidColorBrush.Parse("#09090B"),
-            FontWeight = FontWeight.Bold,
-            FontSize = 12.5,
-            Padding = new Thickness(12, 10),
-            CornerRadius = new CornerRadius(8)
+            if (btStrategyBox.SelectedIndex == 1) // Dubins-Savage Bold Play
+            {
+                if (btQtyBox is not null) btQtyBox.Text = "2";
+                if (btSlTicksBox is not null) btSlTicksBox.Text = "98";
+                if (btTpTicksBox is not null) btTpTicksBox.Text = "102";
+                if (btMaxDailyTradesBox is not null) btMaxDailyTradesBox.Text = "1";
+                if (btMaxDailyLossBox is not null) btMaxDailyLossBox.Text = "1200";
+            }
+            else if (btStrategyBox.SelectedIndex == 2) // El Arte de la Reversión (Estocástico 20,5,5 · 2 Balas DCA)
+            {
+                if (btQtyBox is not null) btQtyBox.Text = "1";
+                if (btFastBox is not null) btFastBox.Text = "20";
+                if (btSlowBox is not null) btSlowBox.Text = "5";
+                if (btSlTicksBox is not null) btSlTicksBox.Text = "120";
+                if (btTpTicksBox is not null) btTpTicksBox.Text = "80";
+                if (btMaxDailyTradesBox is not null) btMaxDailyTradesBox.Text = "6";
+                if (btMaxDailyLossBox is not null) btMaxDailyLossBox.Text = "1500";
+            }
+            else if (btStrategyBox.SelectedIndex == 0) // Entradas Aleatorias estándar
+            {
+                if (btQtyBox is not null) btQtyBox.Text = "1";
+                if (btSlTicksBox is not null) btSlTicksBox.Text = "40";
+                if (btTpTicksBox is not null) btTpTicksBox.Text = "40";
+                if (btMaxDailyTradesBox is not null) btMaxDailyTradesBox.Text = "4";
+                if (btMaxDailyLossBox is not null) btMaxDailyLossBox.Text = "1500";
+            }
         };
-        btRunBtn.Click += async (_, _) => await RunInteractiveBacktestAsync();
+
+        Button MakeModalAcceptButton()
+        {
+            var btn = new Button
+            {
+                Content = "Aceptar",
+                Background = SolidColorBrush.Parse("#FFFFFF"),
+                Foreground = SolidColorBrush.Parse("#09090B"),
+                FontWeight = FontWeight.Bold,
+                FontSize = 12,
+                Padding = new Thickness(20, 6),
+                HorizontalAlignment = HorizontalAlignment.Right,
+                CornerRadius = new CornerRadius(6),
+                Cursor = new Cursor(StandardCursorType.Hand)
+            };
+            btn.Click += (_, _) => CloseModal();
+            return btn;
+        }
+
+        // 2. Modales Flotantes Centrados al Viewport
+        var dateStack = new StackPanel
+        {
+            Spacing = 12,
+            Children =
+            {
+                TwoColumn(
+                    Labeled("Desde (UTC)", btFromBox),
+                    Labeled("Hasta (UTC)", btToBox)),
+                TwoColumn(
+                    Labeled("Inicio Sesión UTC", btSessionStartBox),
+                    Labeled("Cierre Sesión UTC", btSessionEndBox)),
+                new Border
+                {
+                    Background = SolidColorBrush.Parse("#161618"),
+                    BorderBrush = SolidColorBrush.Parse("#27272A"),
+                    BorderThickness = new Thickness(1),
+                    CornerRadius = new CornerRadius(6),
+                    Padding = new Thickness(10, 8),
+                    Child = new TextBlock
+                    {
+                        Text = "Formato de fecha: AAAA-MM-DD (ej: 2026-10-01 a 2026-10-30).\nSesión RTH CME: 13:30 a 20:59 UTC.",
+                        Foreground = SolidColorBrush.Parse("#A1A1AA"),
+                        FontSize = 11,
+                        TextWrapping = TextWrapping.Wrap
+                    }
+                },
+                MakeModalAcceptButton()
+            }
+        };
+        dateModalView = BuildModalView("FECHA Y SESIÓN OPERATIVA", dateStack, CloseModal);
+
+        var strategyStack = new StackPanel
+        {
+            Spacing = 12,
+            Children =
+            {
+                Labeled("Estrategia activa (Core)", btStrategyBox),
+                Labeled("Instrumento y Valor por Punto", btInstrumentBox),
+                Labeled("Fuente de datos histórica", btDataModeBox),
+                TwoColumn(
+                    Labeled("Contratos", btQtyBox),
+                    TwoColumn(Labeled("SMA Ráp.", btFastBox), Labeled("SMA Lenta", btSlowBox))),
+                MakeModalAcceptButton()
+            }
+        };
+        strategyModalView = BuildModalView("ESTRATEGIA E INSTRUMENTO", strategyStack, CloseModal);
+
+        var riskStack = new StackPanel
+        {
+            Spacing = 12,
+            Children =
+            {
+                TwoColumn(
+                    Labeled("Stop Loss (Ticks)", btSlTicksBox),
+                    Labeled("Take Profit (Ticks)", btTpTicksBox)),
+                TwoColumn(
+                    Labeled("Break-Even Trigger", btBeTriggerBox),
+                    TwoColumn(Labeled("BE Offset", btBeOffsetBox), Labeled("Trail Stop", btTrailTicksBox))),
+                TwoColumn(
+                    Labeled("Comisión / lado ($)", btCommBox),
+                    Labeled("Slippage (Ticks)", btSlippageBox)),
+                TwoColumn(
+                    Labeled("Pérdida Diaria (DLL $)", btMaxDailyLossBox),
+                    Labeled("Máx. Trades / Día", btMaxDailyTradesBox)),
+                MakeModalAcceptButton()
+            }
+        };
+        riskModalView = BuildModalView("GESTIÓN DE RIESGO Y COSTOS REALES", riskStack, CloseModal);
+
+        // 3. Contenedor principal con Barra Lateral Izquierda (Sidebar) para las Vistas
+        var bodyGrid = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("180,12,*")
+        };
+
+        // --- BARRA LATERAL IZQUIERDA (SIDEBAR DE NAVEGACIÓN) ---
+        var sidebarBorder = new Border
+        {
+            Background = SolidColorBrush.Parse("#121214"),
+            BorderBrush = SolidColorBrush.Parse("#FFFFFF"),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(10),
+            Padding = new Thickness(10, 14)
+        };
+
+        var sidebarStack = new StackPanel { Spacing = 6 };
+
+        var sidebarHeader = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 7,
+            Margin = new Thickness(4, 0, 0, 8)
+        };
+        sidebarHeader.Children.Add(new Border
+        {
+            Width = 3,
+            Height = 12,
+            CornerRadius = new CornerRadius(2),
+            Background = SolidColorBrush.Parse("#00E599"),
+            VerticalAlignment = VerticalAlignment.Center
+        });
+        sidebarHeader.Children.Add(new TextBlock
+        {
+            Text = "VISTAS",
+            Foreground = SolidColorBrush.Parse("#A1A1AA"),
+            FontWeight = FontWeight.Bold,
+            FontSize = 11,
+            VerticalAlignment = VerticalAlignment.Center
+        });
+        sidebarStack.Children.Add(sidebarHeader);
+
+        btTabSummaryBtn = MakeSidebarNavButton("Resumen", true);
+        btTabGraphBtn = MakeSidebarNavButton("Gráfico", false);
+        btTabTradesBtn = MakeSidebarNavButton("Operaciones", false);
+        btTabPeriodsBtn = MakeSidebarNavButton("Periodos", false);
+        btTabMetricsBtn = MakeSidebarNavButton("Métricas", false);
+
+        btTabSummaryBtn.Click += (_, _) => SwitchAnalyzerView(0);
+        btTabGraphBtn.Click += (_, _) => SwitchAnalyzerView(1);
+        btTabTradesBtn.Click += (_, _) => SwitchAnalyzerView(2);
+        btTabPeriodsBtn.Click += (_, _) => SwitchAnalyzerView(3);
+        btTabMetricsBtn.Click += (_, _) => SwitchAnalyzerView(4);
+
+        sidebarStack.Children.Add(btTabSummaryBtn);
+        sidebarStack.Children.Add(btTabGraphBtn);
+        sidebarStack.Children.Add(btTabTradesBtn);
+        sidebarStack.Children.Add(btTabPeriodsBtn);
+        sidebarStack.Children.Add(btTabMetricsBtn);
+
+        sidebarBorder.Child = sidebarStack;
+        Grid.SetColumn(sidebarBorder, 0);
+        bodyGrid.Children.Add(sidebarBorder);
+
+        // --- ÁREA DERECHA PRINCIPAL ---
+        var rightGrid = new Grid
+        {
+            RowDefinitions = new RowDefinitions("Auto,8,Auto,8,*")
+        };
+        Grid.SetColumn(rightGrid, 2);
+        bodyGrid.Children.Add(rightGrid);
 
         btStatusText = new TextBlock
         {
-            Text = "Configura los parámetros y pulsa 'Ejecutar Analizador'.",
+            Text = "Configura Fecha, Estrategia o Riesgo en el menú inferior y pulsa 'Ejecutar'.",
             Foreground = SolidColorBrush.Parse("#A1A1AA"),
             FontSize = 11,
+            VerticalAlignment = VerticalAlignment.Center,
             TextWrapping = TextWrapping.Wrap
         };
 
-        sidebarStack.Children.Add(MakeSidebarCard("3. GESTIÓN DE RIESGO Y COSTOS REALES", "#FFFFFF", new Control[]
+        btRunBtn = new Button
         {
-            TwoColumn(
-                Labeled("Stop Loss (Ticks)", btSlTicksBox),
-                Labeled("Take Profit (Ticks)", btTpTicksBox)),
-            TwoColumn(
-                Labeled("Break-Even Trigger", btBeTriggerBox),
-                TwoColumn(Labeled("BE Offset", btBeOffsetBox), Labeled("Trail Stop", btTrailTicksBox))),
-            TwoColumn(
-                Labeled("Comisión / lado ($)", btCommBox),
-                Labeled("Slippage (Ticks)", btSlippageBox)),
-            TwoColumn(
-                Labeled("Pérdida Diaria (DLL $)", btMaxDailyLossBox),
-                Labeled("Máx. Trades / Día", btMaxDailyTradesBox)),
-            btRunBtn,
-            new Border
-            {
-                Background = SolidColorBrush.Parse("#161618"),
-                BorderBrush = SolidColorBrush.Parse("#FFFFFF"),
-                BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(6),
-                Padding = new Thickness(9, 7),
-                Child = btStatusText
-            }
-        }));
-
-        sidebarScroll.Content = sidebarStack;
-        Grid.SetColumn(sidebarScroll, 0);
-        bodyGrid.Children.Add(sidebarScroll);
-
-        // Panel Derecho: Tarjetas Cuantitativas + Curva de Equidad + Tablas (Prop Firms / Trades)
-        var rightGrid = new Grid
-        {
-            RowDefinitions = new RowDefinitions("Auto,10,175,10,*")
+            Content = "Ejecutar Analizador",
+            Background = SolidColorBrush.Parse("#FFFFFF"),
+            Foreground = SolidColorBrush.Parse("#09090B"),
+            FontWeight = FontWeight.Bold,
+            FontSize = 12,
+            Padding = new Thickness(16, 7),
+            CornerRadius = new CornerRadius(6),
+            Cursor = new Cursor(StandardCursorType.Hand)
         };
-        Grid.SetColumn(rightGrid, 2);
+        btRunBtn.Click += async (_, _) => await RunInteractiveBacktestAsync();
+
+        var topBarGrid = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto")
+        };
+
+        var titleStack = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        titleStack.Children.Add(new Border
+        {
+            Width = 3,
+            Height = 14,
+            CornerRadius = new CornerRadius(2),
+            Background = SolidColorBrush.Parse("#00E599"),
+            VerticalAlignment = VerticalAlignment.Center
+        });
+        titleStack.Children.Add(new TextBlock
+        {
+            Text = "ANALIZADOR DE ESTRATEGIAS",
+            Foreground = SolidColorBrush.Parse("#FFFFFF"),
+            FontWeight = FontWeight.Bold,
+            FontSize = 12,
+            VerticalAlignment = VerticalAlignment.Center
+        });
+        Grid.SetColumn(titleStack, 0);
+        topBarGrid.Children.Add(titleStack);
+
+        var statusBorder = new Border
+        {
+            Margin = new Thickness(16, 0, 16, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+            Child = btStatusText
+        };
+        Grid.SetColumn(statusBorder, 1);
+        topBarGrid.Children.Add(statusBorder);
+
+        Grid.SetColumn(btRunBtn, 2);
+        topBarGrid.Children.Add(btRunBtn);
+
+        btProgressBar = new ProgressBar
+        {
+            Height = 3.5,
+            Minimum = 0,
+            Maximum = 100,
+            Value = 0,
+            IsIndeterminate = false,
+            IsVisible = false,
+            Background = SolidColorBrush.Parse("#1A1A1E"),
+            Foreground = SolidColorBrush.Parse("#00E599"),
+            CornerRadius = new CornerRadius(2),
+            Margin = new Thickness(0, 7, 0, 0),
+            HorizontalAlignment = HorizontalAlignment.Stretch
+        };
+
+        var topActionBarStack = new StackPanel
+        {
+            Children =
+            {
+                topBarGrid,
+                btProgressBar
+            }
+        };
+
+        var topActionBar = new Border
+        {
+            Background = SolidColorBrush.Parse("#121214"),
+            BorderBrush = SolidColorBrush.Parse("#FFFFFF"),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(14, 7),
+            Child = topActionBarStack
+        };
+        Grid.SetRow(topActionBar, 0);
+        rightGrid.Children.Add(topActionBar);
 
         var kpiGrid = new UniformGrid { Columns = 6 };
         kpiGrid.Children.Add(MakeDynamicKpiCard("P&L NETO TOTAL", "—", "Bruto: — | Com: —", "#00E599", out kpiNetPnlVal, out kpiNetPnlSub));
@@ -1703,132 +2107,166 @@ internal sealed class MainWindow : Window
         kpiGrid.Children.Add(MakeDynamicKpiCard("DRAWDOWN REAL", "—", "DD Cerrado: —", "#FF355E", out kpiDdVal, out kpiDdSub));
         kpiGrid.Children.Add(MakeDynamicKpiCard("SHARPE & SORTINO", "—", "Recovery Factor: —", "#FFFFFF", out kpiSharpeVal, out kpiSharpeSub));
         kpiGrid.Children.Add(MakeDynamicKpiCard("CONSISTENCIA DIARIA", "—", "Rachas: — | Duración: —", "#E4E4E7", out kpiDaysVal, out kpiDaysSub));
-        Grid.SetRow(kpiGrid, 0);
+        Grid.SetRow(kpiGrid, 2);
         rightGrid.Children.Add(kpiGrid);
 
-        btEquitySurface = new EquityCurveSurface();
-        var eqBorder = new Border
-        {
-            Background = SolidColorBrush.Parse("#121214"),
-            BorderBrush = SolidColorBrush.Parse("#FFFFFF"),
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(10),
-            Padding = new Thickness(14, 9),
-            Child = new Grid
-            {
-                RowDefinitions = new RowDefinitions("Auto,*"),
-                Children =
-                {
-                    new StackPanel
-                    {
-                        Orientation = Orientation.Horizontal,
-                        Spacing = 14,
-                        Margin = new Thickness(0, 0, 0, 5),
-                        Children =
-                        {
-                            new TextBlock
-                            {
-                                Text = "CURVA DE EQUIDAD ACUMULADA Y PICO INTRADÍA TRAILING",
-                                Foreground = SolidColorBrush.Parse("#F4F4F5"),
-                                FontWeight = FontWeight.Bold,
-                                FontSize = 11.5
-                            },
-                            new TextBlock
-                            {
-                                Text = "● Línea Verde/Roja: Equidad Neta Cerrada   ● Línea Punteada Gris: Pico Intradía Trailing (con MFE)",
-                                Foreground = SolidColorBrush.Parse("#71717A"),
-                                FontSize = 11
-                            }
-                        }
-                    },
-                    btEquitySurface
-                }
-            }
-        };
-        Grid.SetRow(btEquitySurface, 1);
-        Grid.SetRow(eqBorder, 2);
-        rightGrid.Children.Add(eqBorder);
-
-        // Panel inferior con pestañas: Empresas de Fondeo vs Historial de Operaciones
-        var detailsOuterGrid = new Grid
-        {
-            RowDefinitions = new RowDefinitions("Auto,8,*")
-        };
-
-        var subTabsBar = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 8
-        };
-
-        btTabPropFirmsBtn = new Button
-        {
-            Content = "🏢  Evaluación de Empresas de Fondeo (Apex · Topstep · MFFU · TPT)",
-            Background = SolidColorBrush.Parse("#FFFFFF"),
-            Foreground = SolidColorBrush.Parse("#09090B"),
-            FontWeight = FontWeight.SemiBold,
-            FontSize = 11.5,
-            Padding = new Thickness(14, 6),
-            CornerRadius = new CornerRadius(6)
-        };
-        btTabPropFirmsBtn.Click += (_, _) => SwitchAnalyzerSubTab(0);
-
-        btTabTradesBtn = new Button
-        {
-            Content = "📑  Desglose Operación por Operación (MAE · MFE · R-Múltiplo · Comisiones)",
-            Background = SolidColorBrush.Parse("#18181B"),
-            Foreground = SolidColorBrush.Parse("#71717A"),
-            FontWeight = FontWeight.SemiBold,
-            FontSize = 11.5,
-            Padding = new Thickness(14, 6),
-            CornerRadius = new CornerRadius(6)
-        };
-        btTabTradesBtn.Click += (_, _) => SwitchAnalyzerSubTab(1);
-
-        subTabsBar.Children.Add(btTabPropFirmsBtn);
-        subTabsBar.Children.Add(btTabTradesBtn);
-        Grid.SetRow(subTabsBar, 0);
-        detailsOuterGrid.Children.Add(subTabsBar);
-
-        // Tabla 1: Empresas de Fondeo
-        var pfGrid = new Grid { RowDefinitions = new RowDefinitions("Auto,*") };
-        var pfHeader = new Border
+        // --- VISTAS DEL REPORTE (Resumen · Gráfico · Operaciones · Periodos) ---
+        // Vista 1: Resumen
+        var sumGrid = new Grid { RowDefinitions = new RowDefinitions("Auto,*") };
+        var sumHeader = new Border
         {
             Background = SolidColorBrush.Parse("#161618"),
             BorderBrush = SolidColorBrush.Parse("#FFFFFF"),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(6),
-            Padding = new Thickness(12, 7),
-            Margin = new Thickness(0, 0, 0, 5)
+            Padding = new Thickness(14, 8),
+            Margin = new Thickness(0, 0, 0, 6)
         };
-        var pfHeaderCols = new Grid
+        var sumHeaderCols = new Grid
         {
-            ColumnDefinitions = new ColumnDefinitions("115,175,115,115,120,80,95,*")
+            ColumnDefinitions = new ColumnDefinitions("340,160,160,160")
         };
-        AddTableHeader(pfHeaderCols, 0, "Estado");
-        AddTableHeader(pfHeaderCols, 1, "Plan de Fondeo");
-        AddTableHeader(pfHeaderCols, 2, "P&L Neto Final");
-        AddTableHeader(pfHeaderCols, 3, "Max DD Real");
-        AddTableHeader(pfHeaderCols, 4, "Colchón Mín.");
-        AddTableHeader(pfHeaderCols, 5, "Días Op.");
-        AddTableHeader(pfHeaderCols, 6, "% Mejor Día");
-        AddTableHeader(pfHeaderCols, 7, "Diagnóstico de Reglas");
-        pfHeader.Child = pfHeaderCols;
-        Grid.SetRow(pfHeader, 0);
-        pfGrid.Children.Add(pfHeader);
+        AddTableHeader(sumHeaderCols, 0, "Métrica / Indicador");
+        AddTableHeader(sumHeaderCols, 1, "Todos");
+        AddTableHeader(sumHeaderCols, 2, "Largos");
+        AddTableHeader(sumHeaderCols, 3, "Cortos");
+        sumHeader.Child = sumHeaderCols;
+        Grid.SetRow(sumHeader, 0);
+        sumGrid.Children.Add(sumHeader);
 
-        btPropFirmsRows = new StackPanel { Spacing = 4 };
-        var pfScroll = new ScrollViewer
+        btSummaryRows = new StackPanel { Spacing = 2 };
+        var sumScroll = new ScrollViewer
         {
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-            Content = btPropFirmsRows
+            Content = btSummaryRows
         };
-        Grid.SetRow(pfScroll, 1);
-        pfGrid.Children.Add(pfScroll);
-        btPropFirmsContainer = pfGrid;
+        Grid.SetRow(sumScroll, 1);
+        sumGrid.Children.Add(sumScroll);
+        btSummaryContainer = sumGrid;
 
-        // Tabla 2: Operaciones individuales
-        var trGrid = new Grid { RowDefinitions = new RowDefinitions("Auto,*"), IsVisible = false };
+        // Vista 2: Gráfico
+        btEquitySurface = new EquityCurveSurface();
+        var graphGrid = new Grid
+        {
+            RowDefinitions = new RowDefinitions("Auto,*"),
+            IsVisible = false
+        };
+
+        btGraphFinalNetText = new TextBlock
+        {
+            Text = "Capital: —",
+            Foreground = SolidColorBrush.Parse("#00E599"),
+            FontWeight = FontWeight.Bold,
+            FontSize = 11,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        btGraphPeakText = new TextBlock
+        {
+            Text = "Pico: —",
+            Foreground = SolidColorBrush.Parse("#FFFFFF"),
+            FontWeight = FontWeight.SemiBold,
+            FontSize = 11,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        btGraphMaxDdText = new TextBlock
+        {
+            Text = "Máx DD: —",
+            Foreground = SolidColorBrush.Parse("#FF355E"),
+            FontWeight = FontWeight.SemiBold,
+            FontSize = 11,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        btGraphWinRateText = new TextBlock
+        {
+            Text = "WR: —",
+            Foreground = SolidColorBrush.Parse("#A1A1AA"),
+            FontWeight = FontWeight.SemiBold,
+            FontSize = 11,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+
+        var leftTitleStack = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 9,
+            VerticalAlignment = VerticalAlignment.Center,
+            Children =
+            {
+                new Border
+                {
+                    Width = 3,
+                    Height = 13,
+                    CornerRadius = new CornerRadius(2),
+                    Background = SolidColorBrush.Parse("#00E599"),
+                    VerticalAlignment = VerticalAlignment.Center
+                },
+                new TextBlock
+                {
+                    Text = "GRÁFICO · CURVA DE CAPITAL & DRAWDOWN (ESTILO NINJATRADER)",
+                    Foreground = SolidColorBrush.Parse("#F4F4F5"),
+                    FontWeight = FontWeight.Bold,
+                    FontSize = 11.5,
+                    VerticalAlignment = VerticalAlignment.Center
+                }
+            }
+        };
+        Grid.SetColumn(leftTitleStack, 0);
+
+        var rightBadgesStack = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 16,
+            VerticalAlignment = VerticalAlignment.Center,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Children =
+            {
+                btGraphFinalNetText,
+                btGraphPeakText,
+                btGraphMaxDdText,
+                btGraphWinRateText
+            }
+        };
+        Grid.SetColumn(rightBadgesStack, 2);
+
+        var graphHeaderGrid = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto")
+        };
+        graphHeaderGrid.Children.Add(leftTitleStack);
+        graphHeaderGrid.Children.Add(rightBadgesStack);
+
+        var graphHeader = new Border
+        {
+            Background = SolidColorBrush.Parse("#161618"),
+            BorderBrush = SolidColorBrush.Parse("#27272A"),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(6),
+            Padding = new Thickness(12, 7),
+            Margin = new Thickness(0, 0, 0, 6),
+            Child = graphHeaderGrid
+        };
+        Grid.SetRow(graphHeader, 0);
+        graphGrid.Children.Add(graphHeader);
+
+        var graphBorder = new Border
+        {
+            Background = SolidColorBrush.Parse("#0D0D0E"),
+            BorderBrush = SolidColorBrush.Parse("#1F1F23"),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(10),
+            Child = btEquitySurface
+        };
+        Grid.SetRow(graphBorder, 1);
+        graphGrid.Children.Add(graphBorder);
+        btGraphContainer = graphGrid;
+
+        // Vista 3: Operaciones
+        var trGrid = new Grid
+        {
+            RowDefinitions = new RowDefinitions("Auto,*,Auto"),
+            IsVisible = false
+        };
         var trHeader = new Border
         {
             Background = SolidColorBrush.Parse("#161618"),
@@ -1840,7 +2278,7 @@ internal sealed class MainWindow : Window
         };
         var trHeaderCols = new Grid
         {
-            ColumnDefinitions = new ColumnDefinitions("45,65,130,90,130,90,85,100,120,75,105,*")
+            ColumnDefinitions = new ColumnDefinitions("45,75,130,90,130,90,95,105,120,75,110,*")
         };
         AddTableHeader(trHeaderCols, 0, "#");
         AddTableHeader(trHeaderCols, 1, "Lado/Cant");
@@ -1866,47 +2304,993 @@ internal sealed class MainWindow : Window
         };
         Grid.SetRow(trScroll, 1);
         trGrid.Children.Add(trScroll);
+
+        btTradesFirstBtn = MakePageButton("⏮ Primera");
+        btTradesPrevBtn = MakePageButton("◀ Anterior");
+        btTradesNextBtn = MakePageButton("Siguiente ▶");
+        btTradesLastBtn = MakePageButton("⏭ Última");
+
+        btTradesFirstBtn.Click += (_, _) => PopulateTradesPage(0);
+        btTradesPrevBtn.Click += (_, _) => PopulateTradesPage(tradesCurrentPage - 1);
+        btTradesNextBtn.Click += (_, _) => PopulateTradesPage(tradesCurrentPage + 1);
+        btTradesLastBtn.Click += (_, _) =>
+        {
+            int totalPages = Math.Max(1, (int)Math.Ceiling(currentAllTrades.Count / (double)TradesPageSize));
+            PopulateTradesPage(totalPages - 1);
+        };
+
+        btTradesPageInfoText = new TextBlock
+        {
+            Text = "Mostrando operaciones: —",
+            Foreground = SolidColorBrush.Parse("#A1A1AA"),
+            FontSize = 11.5,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+
+        var paginationBar = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto")
+        };
+        paginationBar.Children.Add(btTradesPageInfoText);
+        Grid.SetColumn(btTradesPageInfoText, 0);
+
+        var paginationBtnStack = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 6,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Children =
+            {
+                btTradesFirstBtn,
+                btTradesPrevBtn,
+                btTradesNextBtn,
+                btTradesLastBtn
+            }
+        };
+        Grid.SetColumn(paginationBtnStack, 2);
+        paginationBar.Children.Add(paginationBtnStack);
+
+        var paginationBorder = new Border
+        {
+            Background = SolidColorBrush.Parse("#161618"),
+            BorderBrush = SolidColorBrush.Parse("#27272A"),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(6),
+            Padding = new Thickness(12, 6),
+            Margin = new Thickness(0, 6, 0, 0),
+            Child = paginationBar
+        };
+        Grid.SetRow(paginationBorder, 2);
+        trGrid.Children.Add(paginationBorder);
+
         btTradesContainer = trGrid;
 
-        var tablesHolder = new Grid();
-        tablesHolder.Children.Add(btPropFirmsContainer);
-        tablesHolder.Children.Add(btTradesContainer);
-        Grid.SetRow(tablesHolder, 2);
-        detailsOuterGrid.Children.Add(tablesHolder);
+        // Vista 4: Periodos (Diario)
+        var perGrid = new Grid
+        {
+            RowDefinitions = new RowDefinitions("Auto,*"),
+            IsVisible = false
+        };
+        var perHeader = new Border
+        {
+            Background = SolidColorBrush.Parse("#161618"),
+            BorderBrush = SolidColorBrush.Parse("#FFFFFF"),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(6),
+            Padding = new Thickness(12, 7),
+            Margin = new Thickness(0, 0, 0, 5)
+        };
+        var perHeaderCols = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("130,85,110,95,115,110,120,130,*")
+        };
+        AddTableHeader(perHeaderCols, 0, "Fecha (UTC)");
+        AddTableHeader(perHeaderCols, 1, "Trades");
+        AddTableHeader(perHeaderCols, 2, "Gan / Perd");
+        AddTableHeader(perHeaderCols, 3, "% Win Día");
+        AddTableHeader(perHeaderCols, 4, "P&L Bruto");
+        AddTableHeader(perHeaderCols, 5, "Comisiones");
+        AddTableHeader(perHeaderCols, 6, "P&L Neto Día");
+        AddTableHeader(perHeaderCols, 7, "Max DD Intradía");
+        AddTableHeader(perHeaderCols, 8, "Equidad Acumulada");
+        perHeader.Child = perHeaderCols;
+        Grid.SetRow(perHeader, 0);
+        perGrid.Children.Add(perHeader);
 
-        var detailsCard = new Border
+        btPeriodsRows = new StackPanel { Spacing = 4 };
+        var perScroll = new ScrollViewer
+        {
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            Content = btPeriodsRows
+        };
+        Grid.SetRow(perScroll, 1);
+        perGrid.Children.Add(perScroll);
+        btPeriodsContainer = perGrid;
+
+        // Vista 5: Métricas Detalladas (Frecuencia, Promedios Diarios y Distribución)
+        btDailyTradesSurface = new DailyTradesChartSurface { Height = 280, MinHeight = 240 };
+
+        var metHeaderGrid = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"),
+            Margin = new Thickness(0, 0, 0, 6)
+        };
+
+        var metTitleStack = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            VerticalAlignment = VerticalAlignment.Center,
+            Children =
+            {
+                new Border
+                {
+                    Width = 3,
+                    Height = 13,
+                    CornerRadius = new CornerRadius(2),
+                    Background = SolidColorBrush.Parse("#00E599"),
+                    VerticalAlignment = VerticalAlignment.Center
+                },
+                new TextBlock
+                {
+                    Text = "MÉTRICAS DETALLADAS · FRECUENCIA & PROMEDIOS DE OPERACIONES AL DÍA",
+                    Foreground = SolidColorBrush.Parse("#F4F4F5"),
+                    FontWeight = FontWeight.Bold,
+                    FontSize = 11.5,
+                    VerticalAlignment = VerticalAlignment.Center
+                }
+            }
+        };
+        Grid.SetColumn(metTitleStack, 0);
+        metHeaderGrid.Children.Add(metTitleStack);
+
+        var btOpenMetricsWindowBtn = new Button
+        {
+            Content = "🗗 Abrir en Ventana Independiente",
+            Background = SolidColorBrush.Parse("#18181B"),
+            Foreground = SolidColorBrush.Parse("#F4F4F5"),
+            BorderBrush = SolidColorBrush.Parse("#3F3F46"),
+            BorderThickness = new Thickness(1),
+            FontSize = 11,
+            Padding = new Thickness(10, 4),
+            CornerRadius = new CornerRadius(5),
+            Cursor = new Cursor(StandardCursorType.Hand),
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        btOpenMetricsWindowBtn.Click += (_, _) =>
+        {
+            if (lastBacktestResult is not null)
+            {
+                var win = new MetricsWindow(lastBacktestResult);
+                win.Show();
+            }
+        };
+        Grid.SetColumn(btOpenMetricsWindowBtn, 2);
+        metHeaderGrid.Children.Add(btOpenMetricsWindowBtn);
+
+        var metHeaderBorder = new Border
+        {
+            Background = SolidColorBrush.Parse("#161618"),
+            BorderBrush = SolidColorBrush.Parse("#27272A"),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(6),
+            Padding = new Thickness(12, 7),
+            Child = metHeaderGrid
+        };
+
+        // KPI Cards Row (5 Cards)
+        var metKpiGrid = new UniformGrid { Columns = 5, Margin = new Thickness(0, 0, 0, 8) };
+        metKpiGrid.Children.Add(MakeDynamicKpiCard("PROMEDIO TRADES / DÍA", "—", "Total trades en periodo", "#FFB224", out metAvgTradesDayVal, out metAvgTradesDaySub));
+        metKpiGrid.Children.Add(MakeDynamicKpiCard("MÁX / MÍN EN UN DÍA", "—", "Rango de frecuencia diaria", "#FFFFFF", out metExtremesTradesVal, out metExtremesTradesSub));
+        metKpiGrid.Children.Add(MakeDynamicKpiCard("P&L MEDIO DIARIO", "—", "Ganancia / pérdida media día", "#00E599", out metAvgPnlDayVal, out metAvgPnlDaySub));
+        metKpiGrid.Children.Add(MakeDynamicKpiCard("CONSISTENCIA DIARIA", "—", "Días positivos vs negativos", "#38BDF8", out metWinningDaysVal, out metWinningDaysSub));
+        metKpiGrid.Children.Add(MakeDynamicKpiCard("DURACIÓN MEDIA", "—", "Tiempo de permanencia en trade", "#E4E4E7", out metAvgDurationVal, out metAvgDurationSub));
+
+        // Center split: Chart on left (60%), DOW breakdown & Frequency buckets on right (40%)
+        var metCenterGrid = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("60*,8,40*"),
+            Margin = new Thickness(0, 0, 0, 8)
+        };
+
+        var chartBorder = new Border
+        {
+            Background = SolidColorBrush.Parse("#0D0D0E"),
+            BorderBrush = SolidColorBrush.Parse("#1F1F23"),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(8),
+            Child = btDailyTradesSurface
+        };
+        Grid.SetColumn(chartBorder, 0);
+        metCenterGrid.Children.Add(chartBorder);
+
+        // Right side: Stack with DOW and Frequency Buckets
+        var rightStatsStack = new StackPanel { Spacing = 8 };
+
+        // 1. DOW Breakdown Card
+        var dowHeaderGrid = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("70,55,60,60,*")
+        };
+        AddTableHeader(dowHeaderGrid, 0, "Día");
+        AddTableHeader(dowHeaderGrid, 1, "Trades");
+        AddTableHeader(dowHeaderGrid, 2, "Media/D");
+        AddTableHeader(dowHeaderGrid, 3, "% Win");
+        AddTableHeader(dowHeaderGrid, 4, "P&L Neto Total");
+
+        metDowStack = new StackPanel { Spacing = 3 };
+
+        var dowCard = new Border
+        {
+            Background = SolidColorBrush.Parse("#141416"),
+            BorderBrush = SolidColorBrush.Parse("#27272A"),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(10, 8),
+            Child = new StackPanel
+            {
+                Spacing = 5,
+                Children =
+                {
+                    new TextBlock
+                    {
+                        Text = "DESGLOSE POR DÍA DE LA SEMANA",
+                        Foreground = SolidColorBrush.Parse("#A1A1AA"),
+                        FontSize = 10,
+                        FontWeight = FontWeight.Bold,
+                        Margin = new Thickness(0, 0, 0, 2)
+                    },
+                    new Border
+                    {
+                        Background = SolidColorBrush.Parse("#18181B"),
+                        BorderThickness = new Thickness(0, 0, 0, 1),
+                        BorderBrush = SolidColorBrush.Parse("#27272A"),
+                        Padding = new Thickness(4, 4),
+                        Child = dowHeaderGrid
+                    },
+                    metDowStack
+                }
+            }
+        };
+        rightStatsStack.Children.Add(dowCard);
+
+        // 2. Frequency Buckets Card
+        metFreqBucketsStack = new StackPanel { Spacing = 4 };
+        var freqCard = new Border
+        {
+            Background = SolidColorBrush.Parse("#141416"),
+            BorderBrush = SolidColorBrush.Parse("#27272A"),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(10, 8),
+            Child = new StackPanel
+            {
+                Spacing = 5,
+                Children =
+                {
+                    new TextBlock
+                    {
+                        Text = "DISTRIBUCIÓN DE FRECUENCIA DE TRADES / DÍA",
+                        Foreground = SolidColorBrush.Parse("#A1A1AA"),
+                        FontSize = 10,
+                        FontWeight = FontWeight.Bold,
+                        Margin = new Thickness(0, 0, 0, 2)
+                    },
+                    metFreqBucketsStack
+                }
+            }
+        };
+        rightStatsStack.Children.Add(freqCard);
+
+        Grid.SetColumn(rightStatsStack, 2);
+        metCenterGrid.Children.Add(rightStatsStack);
+
+        // Bottom row: Advanced stats cards (4 cards)
+        var metBottomGrid = new UniformGrid { Columns = 4 };
+        metBottomGrid.Children.Add(MakeDynamicKpiCard("MEJOR DÍA", "—", "Mayor ganancia en 1 sesión", "#00E599", out metBestDayVal, out metBestDaySub));
+        metBottomGrid.Children.Add(MakeDynamicKpiCard("PEOR DÍA", "—", "Mayor pérdida en 1 sesión", "#FF355E", out metWorstDayVal, out metWorstDaySub));
+        metBottomGrid.Children.Add(MakeDynamicKpiCard("DD INTRADÍA MEDIO", "—", "Riesgo medio por día", "#FF355E", out metAvgIntradayDdVal, out metAvgIntradayDdSub));
+        metBottomGrid.Children.Add(MakeDynamicKpiCard("COMISIONES / BRUTO", "—", "Impacto de costes de ejecución", "#E4E4E7", out metCommImpactVal, out metCommImpactSub));
+
+        var metContentStack = new StackPanel
+        {
+            Spacing = 4,
+            Children =
+            {
+                metHeaderBorder,
+                metKpiGrid,
+                metCenterGrid,
+                metBottomGrid
+            }
+        };
+
+        var metScrollViewer = new ScrollViewer
+        {
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            Content = metContentStack,
+            IsVisible = false
+        };
+
+        btMetricsContainer = metScrollViewer;
+
+        var viewsHolder = new Grid();
+        viewsHolder.Children.Add(btSummaryContainer);
+        viewsHolder.Children.Add(btGraphContainer);
+        viewsHolder.Children.Add(btTradesContainer);
+        viewsHolder.Children.Add(btPeriodsContainer);
+        viewsHolder.Children.Add(btMetricsContainer);
+
+        var mainReportCard = new Border
         {
             Background = SolidColorBrush.Parse("#121214"),
             BorderBrush = SolidColorBrush.Parse("#FFFFFF"),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(10),
             Padding = new Thickness(14, 10),
-            Child = detailsOuterGrid
+            Child = viewsHolder
         };
-        Grid.SetRow(detailsCard, 4);
-        rightGrid.Children.Add(detailsCard);
+        Grid.SetRow(mainReportCard, 4);
+        rightGrid.Children.Add(mainReportCard);
 
-        bodyGrid.Children.Add(rightGrid);
         return bodyGrid;
     }
 
-    private void SwitchAnalyzerSubTab(int index)
+    private void SwitchAnalyzerView(int index)
     {
-        if (btPropFirmsContainer is null || btTradesContainer is null || btTabPropFirmsBtn is null || btTabTradesBtn is null)
+        if (btSummaryContainer is null || btGraphContainer is null || btTradesContainer is null || btPeriodsContainer is null || btMetricsContainer is null)
             return;
 
-        bool showProp = index == 0;
-        btPropFirmsContainer.IsVisible = showProp;
-        btTradesContainer.IsVisible = !showProp;
+        btSummaryContainer.IsVisible = index == 0;
+        btGraphContainer.IsVisible = index == 1;
+        btTradesContainer.IsVisible = index == 2;
+        btPeriodsContainer.IsVisible = index == 3;
+        btMetricsContainer.IsVisible = index == 4;
 
-        btTabPropFirmsBtn.Background = SolidColorBrush.Parse(showProp ? "#FFFFFF" : "#18181B");
-        btTabPropFirmsBtn.Foreground = SolidColorBrush.Parse(showProp ? "#09090B" : "#71717A");
-
-        btTabTradesBtn.Background = SolidColorBrush.Parse(!showProp ? "#FFFFFF" : "#18181B");
-        btTabTradesBtn.Foreground = SolidColorBrush.Parse(!showProp ? "#09090B" : "#71717A");
+        UpdateTabBtn(btTabSummaryBtn, index == 0);
+        UpdateTabBtn(btTabGraphBtn, index == 1);
+        UpdateTabBtn(btTabTradesBtn, index == 2);
+        UpdateTabBtn(btTabPeriodsBtn, index == 3);
+        UpdateTabBtn(btTabMetricsBtn, index == 4);
     }
 
-    private static Border MakeDynamicKpiCard(string title, string initialVal, string initialSub, string accentHex, out TextBlock valBlock, out TextBlock subBlock)
+    private Control BuildPropFirmPage()
+    {
+        var bodyGrid = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("180,12,*")
+        };
+
+        // --- SIDEBAR IZQUIERDA (VISTAS PROP FIRM) ---
+        var sidebarBorder = new Border
+        {
+            Background = SolidColorBrush.Parse("#121214"),
+            BorderBrush = SolidColorBrush.Parse("#FFFFFF"),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(10),
+            Padding = new Thickness(10)
+        };
+
+        var sidebarStack = new StackPanel { Spacing = 6 };
+
+        var sidebarHeader = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 7,
+            Margin = new Thickness(4, 0, 0, 8)
+        };
+        sidebarHeader.Children.Add(new Border
+        {
+            Width = 3,
+            Height = 12,
+            CornerRadius = new CornerRadius(2),
+            Background = SolidColorBrush.Parse("#00E599"),
+            VerticalAlignment = VerticalAlignment.Center
+        });
+        sidebarHeader.Children.Add(new TextBlock
+        {
+            Text = "VISTAS",
+            Foreground = SolidColorBrush.Parse("#A1A1AA"),
+            FontWeight = FontWeight.Bold,
+            FontSize = 11,
+            VerticalAlignment = VerticalAlignment.Center
+        });
+        sidebarStack.Children.Add(sidebarHeader);
+
+        pfTabSimBtn = MakeSidebarNavButton("Simulador", true);
+        pfTabCostBtn = MakeSidebarNavButton("Costos y Lotes", false);
+        pfTabRulesBtn = MakeSidebarNavButton("Reglas de Firmas", false);
+
+        pfTabSimBtn.Click += (_, _) => SwitchPropFirmView(0);
+        pfTabCostBtn.Click += (_, _) => SwitchPropFirmView(1);
+        pfTabRulesBtn.Click += (_, _) => SwitchPropFirmView(2);
+
+        sidebarStack.Children.Add(pfTabSimBtn);
+        sidebarStack.Children.Add(pfTabCostBtn);
+        sidebarStack.Children.Add(pfTabRulesBtn);
+
+        sidebarBorder.Child = sidebarStack;
+        Grid.SetColumn(sidebarBorder, 0);
+        bodyGrid.Children.Add(sidebarBorder);
+
+        // --- ÁREA DERECHA PRINCIPAL ---
+        var rightGrid = new Grid
+        {
+            RowDefinitions = new RowDefinitions("Auto,8,Auto,8,*")
+        };
+        Grid.SetColumn(rightGrid, 2);
+        bodyGrid.Children.Add(rightGrid);
+
+        var pfStatusText = new TextBlock
+        {
+            Text = "Simulador Multi-Cuenta · Pruebas de Viabilidad, Costos y Retiro en Cuentas de Fondeo",
+            Foreground = SolidColorBrush.Parse("#71717A"),
+            FontSize = 11.5,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        Grid.SetRow(pfStatusText, 0);
+        rightGrid.Children.Add(pfStatusText);
+
+        // Controles de cabecera
+        pfPlanCombo = new ComboBox
+        {
+            ItemsSource = new[]
+            {
+                "Tradeify Select Flex 50K (Sin Buffer · Retiro 50%)",
+                "Tradeify Select Daily 50K (Buffer $2,100 · Retiro Diario)",
+                "Tradeify Growth 50K (Pase 1 Día · 5 Días Ganadores)",
+                "Tradeify Lightning 50K (Fondeo Directo · 20% Consistencia)",
+                "Topstep 50K Express (5 Días Ganadores · Retiro 50%)",
+                "Apex 50K Full (Trailing Intradía · Buffer $2,600)"
+            },
+            SelectedIndex = 0,
+            Background = SolidColorBrush.Parse("#161618"),
+            Foreground = SolidColorBrush.Parse("#FFFFFF"),
+            BorderBrush = SolidColorBrush.Parse("#3F3F46"),
+            BorderThickness = new Thickness(1),
+            FontSize = 11,
+            VerticalAlignment = VerticalAlignment.Center,
+            Width = 235
+        };
+
+        pfStrategyModeCombo = new ComboBox
+        {
+            ItemsSource = new[]
+            {
+                "Dubins-Savage · Punto Dulce ($500 F2 + 2.º Retiro)",
+                "Dubins-Savage · Retiro Mínimo ($200 F2 + 2.º Retiro)",
+                "Dubins-Savage · Tope Máximo ($2,500 · Meta +$5K)",
+                "Aleatoria Común ($200 fijo · 1–2 ops/día)",
+                "Estrategia Actual (Trades del Backtest)"
+            },
+            SelectedIndex = 0,
+            Background = SolidColorBrush.Parse("#161618"),
+            Foreground = SolidColorBrush.Parse("#00E599"),
+            BorderBrush = SolidColorBrush.Parse("#3F3F46"),
+            BorderThickness = new Thickness(1),
+            FontSize = 11,
+            VerticalAlignment = VerticalAlignment.Center,
+            Width = 245
+        };
+
+        pfAccountsCountCombo = new ComboBox
+        {
+            ItemsSource = new[] { "5 Cuentas", "10 Cuentas", "20 Cuentas", "50 Cuentas", "100 Cuentas" },
+            SelectedIndex = 1,
+            Background = SolidColorBrush.Parse("#161618"),
+            Foreground = SolidColorBrush.Parse("#FFFFFF"),
+            BorderBrush = SolidColorBrush.Parse("#3F3F46"),
+            BorderThickness = new Thickness(1),
+            FontSize = 11,
+            VerticalAlignment = VerticalAlignment.Center,
+            Width = 98
+        };
+
+        pfAccountPriceBox = new TextBox
+        {
+            Text = "99",
+            Background = SolidColorBrush.Parse("#161618"),
+            Foreground = SolidColorBrush.Parse("#FFFFFF"),
+            BorderBrush = SolidColorBrush.Parse("#3F3F46"),
+            BorderThickness = new Thickness(1),
+            FontSize = 11,
+            Width = 45,
+            VerticalAlignment = VerticalAlignment.Center,
+            HorizontalContentAlignment = HorizontalAlignment.Center
+        };
+
+        pfActivationPriceBox = new TextBox
+        {
+            Text = "0",
+            Background = SolidColorBrush.Parse("#161618"),
+            Foreground = SolidColorBrush.Parse("#FFFFFF"),
+            BorderBrush = SolidColorBrush.Parse("#3F3F46"),
+            BorderThickness = new Thickness(1),
+            FontSize = 11,
+            Width = 45,
+            VerticalAlignment = VerticalAlignment.Center,
+            HorizontalContentAlignment = HorizontalAlignment.Center
+        };
+
+        pfPlanCombo.SelectionChanged += (_, _) =>
+        {
+            int pIdx = pfPlanCombo.SelectedIndex;
+            if (pfAccountPriceBox is not null)
+            {
+                pfAccountPriceBox.Text = pIdx switch
+                {
+                    0 or 1 => "99",
+                    2 => "87",
+                    3 => "295",
+                    4 => "49",
+                    5 => "35",
+                    _ => "99"
+                };
+            }
+            if (pfActivationPriceBox is not null)
+            {
+                pfActivationPriceBox.Text = pIdx == 5 ? "140" : (pIdx == 4 ? "149" : "0");
+            }
+        };
+
+        var pfSimulateBtn = new Button
+        {
+            Content = "▶ Simular Cartera",
+            Background = SolidColorBrush.Parse("#00E599"),
+            Foreground = SolidColorBrush.Parse("#09090B"),
+            FontWeight = FontWeight.Bold,
+            FontSize = 11.5,
+            Padding = new Thickness(14, 6),
+            CornerRadius = new CornerRadius(5),
+            Cursor = new Cursor(StandardCursorType.Hand),
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        pfSimulateBtn.Click += (_, _) => RunPropFirmSimulation();
+
+        var pfControlsGrid = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("Auto,8,Auto,4,Auto,8,Auto,4,Auto,8,Auto,4,Auto,8,Auto,4,Auto,8,Auto,4,Auto,*,Auto")
+        };
+
+        var pfTitleStack = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 7,
+            VerticalAlignment = VerticalAlignment.Center,
+            Children =
+            {
+                new Border
+                {
+                    Width = 3,
+                    Height = 13,
+                    CornerRadius = new CornerRadius(2),
+                    Background = SolidColorBrush.Parse("#00E599"),
+                    VerticalAlignment = VerticalAlignment.Center
+                },
+                new TextBlock
+                {
+                    Text = "PROP FIRM · SIMULADOR",
+                    Foreground = SolidColorBrush.Parse("#F4F4F5"),
+                    FontWeight = FontWeight.Bold,
+                    FontSize = 11.5,
+                    VerticalAlignment = VerticalAlignment.Center
+                }
+            }
+        };
+        Grid.SetColumn(pfTitleStack, 0);
+        pfControlsGrid.Children.Add(pfTitleStack);
+
+        var pfPlanLabel = new TextBlock { Text = "Plan:", Foreground = SolidColorBrush.Parse("#A1A1AA"), FontSize = 11, VerticalAlignment = VerticalAlignment.Center };
+        Grid.SetColumn(pfPlanLabel, 2);
+        pfControlsGrid.Children.Add(pfPlanLabel);
+        Grid.SetColumn(pfPlanCombo, 4);
+        pfControlsGrid.Children.Add(pfPlanCombo);
+
+        var pfModeLabel = new TextBlock { Text = "Teoría / Origen:", Foreground = SolidColorBrush.Parse("#A1A1AA"), FontSize = 11, VerticalAlignment = VerticalAlignment.Center };
+        Grid.SetColumn(pfModeLabel, 6);
+        pfControlsGrid.Children.Add(pfModeLabel);
+        Grid.SetColumn(pfStrategyModeCombo, 8);
+        pfControlsGrid.Children.Add(pfStrategyModeCombo);
+
+        var pfCountLabel = new TextBlock { Text = "Lote:", Foreground = SolidColorBrush.Parse("#A1A1AA"), FontSize = 11, VerticalAlignment = VerticalAlignment.Center };
+        Grid.SetColumn(pfCountLabel, 10);
+        pfControlsGrid.Children.Add(pfCountLabel);
+        Grid.SetColumn(pfAccountsCountCombo, 12);
+        pfControlsGrid.Children.Add(pfAccountsCountCombo);
+
+        var pfCostLabel = new TextBlock { Text = "$ Eval:", Foreground = SolidColorBrush.Parse("#A1A1AA"), FontSize = 11, VerticalAlignment = VerticalAlignment.Center };
+        Grid.SetColumn(pfCostLabel, 14);
+        pfControlsGrid.Children.Add(pfCostLabel);
+        Grid.SetColumn(pfAccountPriceBox, 16);
+        pfControlsGrid.Children.Add(pfAccountPriceBox);
+
+        var pfActLabel = new TextBlock { Text = "$ Act:", Foreground = SolidColorBrush.Parse("#A1A1AA"), FontSize = 11, VerticalAlignment = VerticalAlignment.Center };
+        Grid.SetColumn(pfActLabel, 18);
+        pfControlsGrid.Children.Add(pfActLabel);
+        Grid.SetColumn(pfActivationPriceBox, 20);
+        pfControlsGrid.Children.Add(pfActivationPriceBox);
+
+        Grid.SetColumn(pfSimulateBtn, 22);
+        pfControlsGrid.Children.Add(pfSimulateBtn);
+
+        var pfHeaderBorder = new Border
+        {
+            Background = SolidColorBrush.Parse("#161618"),
+            BorderBrush = SolidColorBrush.Parse("#27272A"),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(6),
+            Padding = new Thickness(10, 6),
+            Margin = new Thickness(0, 0, 0, 6),
+            Child = pfControlsGrid
+        };
+        Grid.SetRow(pfHeaderBorder, 2);
+        rightGrid.Children.Add(pfHeaderBorder);
+
+        // === VISTA 0: SIMULADOR ===
+        var pfKpiGrid = new UniformGrid { Columns = 5, Margin = new Thickness(0, 0, 0, 8) };
+        pfKpiGrid.Children.Add(MakeDynamicKpiCard("TASA EVALUACIÓN", "—", "Cuentas que pasaron Fase 1", "#FFFFFF", out pfKpiEvalPassVal, out pfKpiEvalPassSub));
+        pfKpiGrid.Children.Add(MakeDynamicKpiCard("TASA DE RETIRO", "—", "Cuentas con cobro bancario", "#38BDF8", out pfKpiPayoutPassVal, out pfKpiPayoutPassSub));
+        pfKpiGrid.Children.Add(MakeDynamicKpiCard("TOTAL RETIRADO", "—", "Cobros brutos recibidos", "#00E599", out pfKpiTotalWithdrawnVal, out pfKpiTotalWithdrawnSub));
+        pfKpiGrid.Children.Add(MakeDynamicKpiCard("INVERSIÓN TOTAL", "—", "Gasto en cuentas y fees", "#FF355E", out pfKpiTotalCostVal, out pfKpiTotalCostSub));
+        pfKpiGrid.Children.Add(MakeDynamicKpiCard("P&L NETO DEL TRADER", "—", "Beneficio neto real y ROI", "#00E599", out pfKpiNetRoiVal, out pfKpiNetRoiSub));
+
+        var pfCenterGrid = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("62*,8,38*"),
+            Margin = new Thickness(0, 0, 0, 6)
+        };
+
+        pfAccountsTableRows = new StackPanel { Spacing = 3 };
+        var pfTableScroll = new ScrollViewer
+        {
+            Height = 440,
+            MinHeight = 350,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            Content = pfAccountsTableRows
+        };
+
+        var pfTableHeaderGrid = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("35,110,110,60,50,85,90,*")
+        };
+        AddTableHeader(pfTableHeaderGrid, 0, "#");
+        AddTableHeader(pfTableHeaderGrid, 1, "Estado");
+        AddTableHeader(pfTableHeaderGrid, 2, "Fase");
+        AddTableHeader(pfTableHeaderGrid, 3, "Días");
+        AddTableHeader(pfTableHeaderGrid, 4, "Ops");
+        AddTableHeader(pfTableHeaderGrid, 5, "P&L Cta");
+        AddTableHeader(pfTableHeaderGrid, 6, "Retiro ($)");
+        AddTableHeader(pfTableHeaderGrid, 7, "Causa / Detalle");
+
+        var pfTableCard = new Border
+        {
+            Background = SolidColorBrush.Parse("#141416"),
+            BorderBrush = SolidColorBrush.Parse("#27272A"),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(10, 8),
+            Child = new StackPanel
+            {
+                Spacing = 5,
+                Children =
+                {
+                    new Border
+                    {
+                        Background = SolidColorBrush.Parse("#18181B"),
+                        BorderBrush = SolidColorBrush.Parse("#27272A"),
+                        BorderThickness = new Thickness(0, 0, 0, 1),
+                        Padding = new Thickness(4, 4),
+                        Child = pfTableHeaderGrid
+                    },
+                    pfTableScroll
+                }
+            }
+        };
+        Grid.SetColumn(pfTableCard, 0);
+        pfCenterGrid.Children.Add(pfTableCard);
+
+        pfPassBarFill = new Border { Background = SolidColorBrush.Parse("#38BDF8"), Height = 10, CornerRadius = new CornerRadius(2, 0, 0, 2) };
+        pfPayoutBarFill = new Border { Background = SolidColorBrush.Parse("#00E599"), Height = 10 };
+        pfBlownBarFill = new Border { Background = SolidColorBrush.Parse("#FF355E"), Height = 10, CornerRadius = new CornerRadius(0, 2, 2, 0) };
+
+        pfDistTrack = new Grid
+        {
+            Height = 10,
+            ColumnDefinitions = new ColumnDefinitions("1*,1*,1*"),
+            Margin = new Thickness(0, 4, 0, 6)
+        };
+        Grid.SetColumn(pfPayoutBarFill, 0);
+        Grid.SetColumn(pfPassBarFill, 1);
+        Grid.SetColumn(pfBlownBarFill, 2);
+        pfDistTrack.Children.Add(pfPayoutBarFill);
+        pfDistTrack.Children.Add(pfPassBarFill);
+        pfDistTrack.Children.Add(pfBlownBarFill);
+
+        pfDistributionLegend = new TextBlock
+        {
+            Text = "Verde: Retiró | Azul: Pasó Eval pero quebró en Fondeada | Rojo: Quebró Eval",
+            Foreground = SolidColorBrush.Parse("#A1A1AA"),
+            FontSize = 9.5,
+            Margin = new Thickness(0, 0, 0, 8)
+        };
+
+        pfEvText = new TextBlock
+        {
+            Text = "Esperanza Matemática (EV) por cuenta: —",
+            Foreground = SolidColorBrush.Parse("#FFFFFF"),
+            FontWeight = FontWeight.SemiBold,
+            FontSize = 11,
+            Margin = new Thickness(0, 0, 0, 6),
+            TextWrapping = TextWrapping.Wrap
+        };
+
+        pfVerdictText = new TextBlock
+        {
+            Text = "Pulsa 'Simular Cartera' para ejecutar una simulación Monte Carlo de las cuentas con la estrategia seleccionada.",
+            Foreground = SolidColorBrush.Parse("#A1A1AA"),
+            FontSize = 10.5,
+            TextWrapping = TextWrapping.Wrap
+        };
+
+        var pfStatsCard = new Border
+        {
+            Background = SolidColorBrush.Parse("#141416"),
+            BorderBrush = SolidColorBrush.Parse("#27272A"),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(12, 10),
+            Child = new StackPanel
+            {
+                Spacing = 5,
+                Children =
+                {
+                    new TextBlock
+                    {
+                        Text = "DISTRIBUCIÓN & ANÁLISIS DE VIABILIDAD",
+                        Foreground = SolidColorBrush.Parse("#FFFFFF"),
+                        FontSize = 11,
+                        FontWeight = FontWeight.Bold
+                    },
+                    pfDistTrack,
+                    pfDistributionLegend,
+                    new Border { Height = 1, Background = SolidColorBrush.Parse("#222226"), Margin = new Thickness(0, 2, 0, 6) },
+                    pfEvText,
+                    pfVerdictText
+                }
+            }
+        };
+        Grid.SetColumn(pfStatsCard, 2);
+        pfCenterGrid.Children.Add(pfStatsCard);
+
+        var simContentStack = new StackPanel
+        {
+            Spacing = 6,
+            Children = { pfKpiGrid, pfCenterGrid }
+        };
+        pfSimContainer = new ScrollViewer
+        {
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            Content = simContentStack,
+            IsVisible = true
+        };
+
+        // === VISTA 1: COSTOS Y LOTES ===
+        pfCostTitleText = new TextBlock
+        {
+            Text = "COSTO DE LA CARTERA",
+            Foreground = SolidColorBrush.Parse("#FFFFFF"),
+            FontSize = 11,
+            FontWeight = FontWeight.Bold
+        };
+
+        var pfCostHeaderGrid = new Grid { ColumnDefinitions = new ColumnDefinitions(PropFirmCostColumns) };
+        AddTableHeader(pfCostHeaderGrid, 0, "Plan 50K");
+        AddTableHeader(pfCostHeaderGrid, 1, "Precio base");
+        AddTableHeader(pfCostHeaderGrid, 2, "Con cupón");
+        AddTableHeader(pfCostHeaderGrid, 3, "Total base");
+        AddTableHeader(pfCostHeaderGrid, 4, "Total con cupón");
+        AddTableHeader(pfCostHeaderGrid, 5, "Activación");
+        AddTableHeader(pfCostHeaderGrid, 6, "Recuperas con");
+
+        pfCostTableRows = new StackPanel { Spacing = 3 };
+
+        var pfCostCard = new Border
+        {
+            Background = SolidColorBrush.Parse("#141416"),
+            BorderBrush = SolidColorBrush.Parse("#27272A"),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(14, 12),
+            Child = new StackPanel
+            {
+                Spacing = 10,
+                Children =
+                {
+                    pfCostTitleText,
+                    new Border
+                    {
+                        Background = SolidColorBrush.Parse("#18181B"),
+                        BorderBrush = SolidColorBrush.Parse("#27272A"),
+                        BorderThickness = new Thickness(0, 0, 0, 1),
+                        Padding = new Thickness(4, 4),
+                        Child = pfCostHeaderGrid
+                    },
+                    pfCostTableRows,
+                    new TextBlock
+                    {
+                        Text = "Precios aproximados (Tradeify según tradeify.co y sitios de reseñas; Topstep y Apex referenciales). El cupón varía según temporada. \"Recuperas con\" = retiros netos de ~$1,000 necesarios para cubrir el costo total del lote.",
+                        Foreground = SolidColorBrush.Parse("#71717A"),
+                        FontSize = 10,
+                        TextWrapping = TextWrapping.Wrap
+                    }
+                }
+            }
+        };
+
+        pfAccountsCountCombo.SelectionChanged += (_, _) => RefreshPropFirmCostTable();
+        pfPlanCombo.SelectionChanged += (_, _) => RefreshPropFirmCostTable();
+        RefreshPropFirmCostTable();
+
+        pfCostContainer = new ScrollViewer
+        {
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            Content = pfCostCard,
+            IsVisible = false
+        };
+
+        // === VISTA 2: REGLAS DE FIRMAS ===
+        var rulesTable = BuildPropFirmRulesTable();
+        pfRulesContainer = new ScrollViewer
+        {
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            Content = rulesTable,
+            IsVisible = false
+        };
+
+        // Views holder
+        var viewsHolder = new Grid();
+        viewsHolder.Children.Add(pfSimContainer);
+        viewsHolder.Children.Add(pfCostContainer);
+        viewsHolder.Children.Add(pfRulesContainer);
+
+        var mainCard = new Border
+        {
+            Background = SolidColorBrush.Parse("#121214"),
+            BorderBrush = SolidColorBrush.Parse("#FFFFFF"),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(10),
+            Padding = new Thickness(14, 10),
+            Child = viewsHolder
+        };
+        Grid.SetRow(mainCard, 4);
+        rightGrid.Children.Add(mainCard);
+
+        return bodyGrid;
+    }
+
+    private static Control BuildPropFirmRulesTable()
+    {
+        const string rulesCols = "190,95,115,85,95,105,*";
+        var headerGrid = new Grid { ColumnDefinitions = new ColumnDefinitions(rulesCols) };
+        AddTableHeader(headerGrid, 0, "Firma / Plan 50K");
+        AddTableHeader(headerGrid, 1, "Drawdown");
+        AddTableHeader(headerGrid, 2, "Tipo Drawdown");
+        AddTableHeader(headerGrid, 3, "Días Mín.");
+        AddTableHeader(headerGrid, 4, "Meta Eval");
+        AddTableHeader(headerGrid, 5, "Buffer Cobro");
+        AddTableHeader(headerGrid, 6, "Reglas de Retiro y Consistencia");
+
+        var rowsStack = new StackPanel { Spacing = 3 };
+
+        var rulesData = new[]
+        {
+            ("Tradeify Select Flex 50K", "$2,000", "EOD (Fin de Día)", "3 días", "$3,000", "Sin Buffer ($0)", "Retiro 50% al 5.º día ganador ($150 mín). Tope $2,500."),
+            ("Tradeify Select Daily 50K", "$2,000", "EOD (Fin de Día)", "3 días", "$3,000", "$2,100 Buffer", "Retiro diario por encima del buffer ($2,100). Sin espera semanal."),
+            ("Tradeify Growth 50K", "$2,000", "EOD (Fin de Día)", "1 día", "$3,000", "Sin Buffer ($0)", "Pase en 1 día. Consistencia 35% y límite diario de pérdida $1,250."),
+            ("Tradeify Lightning 50K", "$2,000", "EOD (Fin de Día)", "Inmediato", "Sin Eval", "$2,000 Buffer", "Fondeo Directo sin evaluación. Regla de consistencia estricta 20%."),
+            ("Topstep 50K Express", "$2,000", "EOD (Fin de Día)", "2 días", "$3,000", "$2,000 Buffer", "5 días ganadores de $150. Retiro del 50% del balance sobre el colchón."),
+            ("Apex 50K Full", "$2,500", "Intradía Trailing", "7 días", "$3,000", "$2,600 Buffer", "Trailing persigue ganancias abiertas en vivo. 10 días para primer retiro.")
+        };
+
+        for (int i = 0; i < rulesData.Length; i++)
+        {
+            var r = rulesData[i];
+            var rowGrid = new Grid { ColumnDefinitions = new ColumnDefinitions(rulesCols), VerticalAlignment = VerticalAlignment.Center };
+            AddTableCell(rowGrid, 0, r.Item1, "#00E599", true);
+            AddTableCell(rowGrid, 1, r.Item2, "#FF355E");
+            AddTableCell(rowGrid, 2, r.Item3, r.Item3.Contains("Trailing") ? "#FFB224" : "#38BDF8");
+            AddTableCell(rowGrid, 3, r.Item4, "#E4E4E7");
+            AddTableCell(rowGrid, 4, r.Item5, "#00E599");
+            AddTableCell(rowGrid, 5, r.Item6, r.Item6.Contains("Sin") ? "#00E599" : "#FFB224");
+            AddTableCell(rowGrid, 6, r.Item7, "#A1A1AA");
+
+            rowsStack.Children.Add(new Border
+            {
+                Background = SolidColorBrush.Parse(i % 2 == 0 ? "#161619" : "#131316"),
+                CornerRadius = new CornerRadius(4),
+                Padding = new Thickness(6, 6),
+                Child = rowGrid
+            });
+        }
+
+        return new Border
+        {
+            Background = SolidColorBrush.Parse("#141416"),
+            BorderBrush = SolidColorBrush.Parse("#27272A"),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(14, 12),
+            Child = new StackPanel
+            {
+                Spacing = 10,
+                Children =
+                {
+                    new TextBlock
+                    {
+                        Text = "MATRIZ COMPARATIVA DE REGLAS Y CONDICIONES (50K)",
+                        Foreground = SolidColorBrush.Parse("#FFFFFF"),
+                        FontSize = 11,
+                        FontWeight = FontWeight.Bold
+                    },
+                    new Border
+                    {
+                        Background = SolidColorBrush.Parse("#18181B"),
+                        BorderBrush = SolidColorBrush.Parse("#27272A"),
+                        BorderThickness = new Thickness(0, 0, 0, 1),
+                        Padding = new Thickness(4, 4),
+                        Child = headerGrid
+                    },
+                    rowsStack,
+                    new TextBlock
+                    {
+                        Text = "EOD (End of Day): El drawdown solo se calcula con el saldo al cierre del mercado (16:00 CT). Las excursiones no te quiebran durante el día mientras no toques el límite.",
+                        Foreground = SolidColorBrush.Parse("#71717A"),
+                        FontSize = 10,
+                        TextWrapping = TextWrapping.Wrap
+                    }
+                }
+            }
+        };
+    }
+
+    private void SwitchPropFirmView(int index)
+    {
+        if (pfSimContainer is null || pfCostContainer is null || pfRulesContainer is null)
+            return;
+
+        pfSimContainer.IsVisible = index == 0;
+        pfCostContainer.IsVisible = index == 1;
+        pfRulesContainer.IsVisible = index == 2;
+
+        UpdateTabBtn(pfTabSimBtn, index == 0);
+        UpdateTabBtn(pfTabCostBtn, index == 1);
+        UpdateTabBtn(pfTabRulesBtn, index == 2);
+    }
+
+    private static void UpdateTabBtn(Button? btn, bool active)
+    {
+        if (btn is null) return;
+        btn.Background = SolidColorBrush.Parse(active ? "#FFFFFF" : "#141416");
+        btn.Foreground = SolidColorBrush.Parse(active ? "#09090B" : "#A1A1AA");
+        btn.FontWeight = active ? FontWeight.Bold : FontWeight.SemiBold;
+    }
+
+    private static Button MakeSidebarNavButton(string text, bool isActive) => new()
+    {
+        Content = text,
+        HorizontalAlignment = HorizontalAlignment.Stretch,
+        HorizontalContentAlignment = HorizontalAlignment.Left,
+        Background = SolidColorBrush.Parse(isActive ? "#FFFFFF" : "#141416"),
+        Foreground = SolidColorBrush.Parse(isActive ? "#09090B" : "#A1A1AA"),
+        FontWeight = isActive ? FontWeight.Bold : FontWeight.SemiBold,
+        FontSize = 12,
+        Padding = new Thickness(14, 10),
+        BorderThickness = new Thickness(0),
+        CornerRadius = new CornerRadius(6),
+        Cursor = new Cursor(StandardCursorType.Hand)
+    };
+
+    internal static Border MakeDynamicKpiCard(string title, string initialVal, string initialSub, string accentHex, out TextBlock valBlock, out TextBlock subBlock)
     {
         valBlock = new TextBlock
         {
@@ -1956,9 +3340,23 @@ internal sealed class MainWindow : Window
             return;
 
         isRunningBacktest = true;
-        btRunBtn.IsEnabled = false;
-        btRunBtn.Content = "Calculando Simulación...";
-        btStatusText.Text = "Cargando datos y ejecutando motor de backtesting...";
+        if (btProgressBar is not null)
+        {
+            btProgressBar.IsVisible = true;
+            btProgressBar.IsIndeterminate = true;
+            btProgressBar.Value = 0;
+        }
+        if (btRunBtn is not null)
+        {
+            btRunBtn.IsEnabled = false;
+            btRunBtn.Content = "Cargando datos...";
+        }
+        if (navAnalyzerRunBtn is not null)
+        {
+            navAnalyzerRunBtn.IsEnabled = false;
+            navAnalyzerRunBtn.Content = "Cargando...";
+        }
+        btStatusText.Text = "Leyendo serie de datos desde disco...";
         btStatusText.Foreground = SolidColorBrush.Parse("#A1A1AA");
 
         try
@@ -1975,19 +3373,26 @@ internal sealed class MainWindow : Window
                 _ => InstrumentSpec.NQ
             };
 
-            string sourcePath = dataModeIdx switch
+            string? resolvedPath = dataModeIdx switch
             {
-                1 => File.Exists(adjustedDatasetPath) ? adjustedDatasetPath : defaultDatasetPath,
-                2 => tbboDatasetPath,
-                _ => defaultDatasetPath
+                0 => Workspace.FindDatabentoTbboMinuteFile(workspaceRoot, spec.Symbol)
+                    ?? Workspace.FindDatabentoMinuteFile(workspaceRoot, spec.Symbol, adjusted: false),
+                1 => Workspace.FindDatabentoTbboFile(workspaceRoot, spec.Symbol),
+                2 => Workspace.FindDatabentoMinuteFile(workspaceRoot, spec.Symbol, adjusted: false),
+                3 => Workspace.FindDatabentoMinuteFile(workspaceRoot, spec.Symbol, adjusted: true)
+                    ?? Workspace.FindDatabentoMinuteFile(workspaceRoot, spec.Symbol, adjusted: false),
+                _ => Workspace.FindDatabentoTbboMinuteFile(workspaceRoot, spec.Symbol)
+                    ?? Workspace.FindDatabentoMinuteFile(workspaceRoot, spec.Symbol, adjusted: false)
             };
 
-            if (!File.Exists(sourcePath))
+            if (!Workspace.DatasetExists(resolvedPath))
             {
-                btStatusText.Text = $"No se encontró el archivo de datos: {Path.GetFileName(sourcePath)}";
+                btStatusText.Text = $"No se encontraron datos locales para {spec.Symbol} (revisa data/databento/{spec.Symbol}/)";
                 btStatusText.Foreground = SolidColorBrush.Parse("#FF355E");
                 return;
             }
+
+            string sourcePath = resolvedPath!;
 
             DateTime? fromUtc = ParseOptionalUtc(btFromBox?.Text, false);
             DateTime? toUtc = ParseOptionalUtc(btToBox?.Text, true);
@@ -2008,27 +3413,39 @@ internal sealed class MainWindow : Window
             TimeOnly? sessionStart = TimeOnly.TryParseExact(btSessionStartBox?.Text?.Trim(), "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out TimeOnly ss) ? ss : null;
             TimeOnly? sessionEnd = TimeOnly.TryParseExact(btSessionEndBox?.Text?.Trim(), "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out TimeOnly se) ? se : null;
 
-            bool useTicks = dataModeIdx == 2;
+            bool useTicks = dataModeIdx == 1;
 
-            var (result, evaluations) = await Task.Run(() =>
+            int stratIdx = btStrategyBox?.SelectedIndex ?? 0;
+
+            var progressHandler = new Progress<double>(p =>
+            {
+                if (btProgressBar is null) return;
+                btProgressBar.IsIndeterminate = false;
+                int pct = (int)Math.Clamp(Math.Round(p * 100), 0, 100);
+                btProgressBar.Value = pct;
+                btStatusText.Text = $"Calculando simulación... {pct}% completado";
+                if (btRunBtn is not null) btRunBtn.Content = $"Calculando {pct}%...";
+                if (navAnalyzerRunBtn is not null) navAnalyzerRunBtn.Content = $"Calculando {pct}%";
+            });
+
+            var result = await Task.Run(() =>
             {
                 IReadOnlyList<Bar> bars = useTicks ? Array.Empty<Bar>() : new NinjaTraderMinuteImporter().Read(sourcePath, fromUtc, toUtc);
                 IReadOnlyList<Tick> ticks = useTicks ? new NinjaTraderTickImporter().Read(sourcePath, fromUtc, toUtc) : Array.Empty<Tick>();
 
-                IStrategy strategy = strategyIdx == 0
-                    ? new VwapDeltaPullbackStrategy(new VwapDeltaPullbackParameters(
-                        quantity: qty,
-                        anchorTimeUtc: sessionStart.HasValue ? sessionStart.Value.ToTimeSpan() : new TimeSpan(13, 30, 0),
-                        stopLossTicks: slTicks,
-                        takeProfitTicks: tpTicks,
-                        breakEvenTriggerTicks: beTrigger,
-                        breakEvenOffsetTicks: beOffset,
-                        trailingStopTicks: trailTicks,
-                        tickSize: spec.TickSize))
-                    : new SmaCrossoverStrategy(new StrategyParameters(
-                        fast, slow, qty, slTicks, tpTicks, beTrigger, beOffset, trailTicks));
+                IStrategy strategy = stratIdx switch
+                {
+                    1 => new DubinsSavageStrategy(new StrategyParameters(
+                        fast, slow, qty, slTicks ?? 98, tpTicks ?? 102, beTrigger, beOffset, trailTicks), seed: null),
+                    2 => new ReversionPlaybookStrategy(new StrategyParameters(
+                        fast > 1 ? fast : 20, slow > 1 ? slow : 5, qty, slTicks, tpTicks, beTrigger, beOffset, trailTicks)),
+                    3 => new SmaCrossoverStrategy(new StrategyParameters(
+                        fast, slow, qty, slTicks, tpTicks, beTrigger, beOffset, trailTicks)),
+                    _ => new RandomEntryStrategy(new StrategyParameters(
+                        fast, slow, qty, slTicks ?? 40, tpTicks ?? 40, beTrigger, beOffset, trailTicks), seed: null)
+                };
 
-                var btResult = new BacktestRunner().Run(new BacktestRequest
+                return new BacktestRunner().Run(new BacktestRequest
                 {
                     Bars = bars,
                     Ticks = ticks,
@@ -2047,20 +3464,12 @@ internal sealed class MainWindow : Window
                     SessionStartUtc = sessionStart,
                     SessionEndUtc = sessionEnd,
                     MaxDailyLossUsd = maxDailyLoss,
-                    MaxTradesPerDay = maxDailyTrades
+                    MaxTradesPerDay = maxDailyTrades,
+                    Progress = progressHandler
                 });
-
-                string propRoot = Workspace.FindPropFirmsDirectory(workspaceRoot);
-                var firms = PropFirmEvaluator.LoadAll(propRoot);
-                var evaluator = new PropFirmEvaluator();
-                var evals = firms
-                    .SelectMany(f => f.Plans.Select(p => evaluator.Evaluate(btResult, f, p)))
-                    .ToList();
-
-                return (btResult, evals);
             });
 
-            PopulateAnalyzerResults(result, evaluations);
+            PopulateAnalyzerResults(result);
             btStatusText.Text = $"Completado: {result.Summary.Bars:N0} velas, {result.Summary.ClosedTrades:N0} trades ({result.Configuration.Strategy} · {spec.Symbol}).";
             btStatusText.Foreground = SolidColorBrush.Parse("#00E599");
         }
@@ -2072,12 +3481,26 @@ internal sealed class MainWindow : Window
         finally
         {
             isRunningBacktest = false;
-            btRunBtn.IsEnabled = true;
-            btRunBtn.Content = "▶  Ejecutar Analizador & Evaluación";
+            if (btProgressBar is not null)
+            {
+                btProgressBar.IsVisible = false;
+                btProgressBar.IsIndeterminate = false;
+                btProgressBar.Value = 0;
+            }
+            if (btRunBtn is not null)
+            {
+                btRunBtn.IsEnabled = true;
+                btRunBtn.Content = "Ejecutar Analizador";
+            }
+            if (navAnalyzerRunBtn is not null)
+            {
+                navAnalyzerRunBtn.IsEnabled = true;
+                navAnalyzerRunBtn.Content = "▶  Ejecutar";
+            }
         }
     }
 
-    private void PopulateAnalyzerResults(BacktestResult result, List<PropFirmEvaluationResult> evaluations)
+    private void PopulateAnalyzerResults(BacktestResult result)
     {
         var s = result.Summary;
 
@@ -2124,36 +3547,62 @@ internal sealed class MainWindow : Window
             kpiDaysSub.Text = $"Rachas: +{s.MaxConsecutiveWins}/-{s.MaxConsecutiveLosses} | Dur: {s.AverageTradeDurationMinutes:F1}m";
         }
 
+        if (btGraphFinalNetText is not null)
+        {
+            btGraphFinalNetText.Text = $"Capital: {s.NetProfit:+$#,##0.00;-$#,##0.00;$0.00}";
+            btGraphFinalNetText.Foreground = SolidColorBrush.Parse(s.NetProfit >= 0 ? "#00E599" : "#FF355E");
+        }
+        double peak = result.Trades.Count > 0 ? Math.Max(0d, result.Trades.Max(t => t.CumulativeNetProfitUsd)) : 0d;
+        if (btGraphPeakText is not null)
+        {
+            btGraphPeakText.Text = $"Pico: ${peak:#,##0.00}";
+        }
+        if (btGraphMaxDdText is not null)
+        {
+            btGraphMaxDdText.Text = $"Máx DD: -${s.MaxIntradayTrailingDrawdown:#,##0.00}";
+        }
+        if (btGraphWinRateText is not null)
+        {
+            btGraphWinRateText.Text = $"WR: {s.WinRate * 100:F1}% ({s.ClosedTrades} ops)";
+            btGraphWinRateText.Foreground = SolidColorBrush.Parse(s.WinRate >= 0.5 ? "#00E599" : "#FF355E");
+        }
+
+        // Gráfico de Equidad
         btEquitySurface?.SetTrades(result.Trades);
 
-        if (btPropFirmsRows is not null)
+        // Tabla 1: NinjaTrader Summary (All / Long / Short)
+        PopulateNinjaTraderSummaryRows(s);
+
+        // Tabla 2: NinjaTrader Trades (Operaciones detalladas con Paginación)
+        currentAllTrades = result.Trades;
+        PopulateTradesPage(0);
+
+        // Tabla 3: NinjaTrader Periods (Desglose Diario)
+        if (btPeriodsRows is not null && result.DailyPerformance is not null)
         {
-            btPropFirmsRows.Children.Clear();
-            foreach (var ev in evaluations)
+            btPeriodsRows.Children.Clear();
+            foreach (var dp in result.DailyPerformance)
             {
                 var rowGrid = new Grid
                 {
-                    ColumnDefinitions = new ColumnDefinitions("115,175,115,115,120,80,95,*"),
+                    ColumnDefinitions = new ColumnDefinitions("130,85,110,95,115,110,120,130,*"),
                     VerticalAlignment = VerticalAlignment.Center
                 };
 
-                string badgeText = ev.Passed ? "APROBADA" : ev.AccountBlown ? "QUEMADA" : "PENDIENTE";
-                string badgeBg = ev.Passed ? "#14291F" : ev.AccountBlown ? "#2A1417" : "#18181B";
-                string badgeFg = ev.Passed ? "#00E599" : ev.AccountBlown ? "#FF355E" : "#A1A1AA";
-                var statusBadge = MakeBadge(badgeText, badgeBg, badgeFg);
-                statusBadge.HorizontalAlignment = HorizontalAlignment.Left;
-                Grid.SetColumn(statusBadge, 0);
-                rowGrid.Children.Add(statusBadge);
+                bool isWin = dp.NetProfit > 0;
+                double winPct = dp.Trades > 0 ? (double)dp.WinningTrades / dp.Trades * 100 : 0.0;
 
-                AddTableCell(rowGrid, 1, ev.PlanName, "#FFFFFF", true);
-                AddTableCell(rowGrid, 2, $"{ev.FinalNetProfitUsd:+$#,##0.00;-$#,##0.00;$0.00}", ev.FinalNetProfitUsd >= 0 ? "#00E599" : "#FF355E", true);
-                AddTableCell(rowGrid, 3, $"${ev.MaxObservedDrawdownUsd:#,##0.00}", "#FF355E");
-                AddTableCell(rowGrid, 4, $"${ev.MinRemainingBufferUsd:#,##0.00}", ev.MinRemainingBufferUsd > 0 ? "#FFFFFF" : "#FF355E", true);
-                AddTableCell(rowGrid, 5, $"{ev.TradingDays} días", "#A1A1AA");
-                AddTableCell(rowGrid, 6, $"{ev.BestDayProfitSharePercent:F1}%", ev.ConsistencySatisfied ? "#71717A" : "#FF355E");
-                AddTableCell(rowGrid, 7, ev.SummaryReason, "#E4E4E7");
+                AddTableCell(rowGrid, 0, dp.DateUtc.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), "#FFFFFF", true);
+                AddTableCell(rowGrid, 1, $"{dp.Trades}", "#A1A1AA");
+                AddTableCell(rowGrid, 2, $"+{dp.WinningTrades} / -{dp.LosingTrades}", "#E4E4E7");
+                AddTableCell(rowGrid, 3, $"{winPct:F1}%", winPct >= 50 ? "#00E599" : "#FF355E");
+                AddTableCell(rowGrid, 4, $"{dp.GrossProfit:+$#,##0.00;-$#,##0.00;$0.00}", dp.GrossProfit >= 0 ? "#00E599" : "#FF355E");
+                AddTableCell(rowGrid, 5, $"${dp.Commission:#,##0.00}", "#71717A");
+                AddTableCell(rowGrid, 6, $"{dp.NetProfit:+$#,##0.00;-$#,##0.00;$0.00}", isWin ? "#00E599" : "#FF355E", true);
+                AddTableCell(rowGrid, 7, $"-${dp.MaxIntradayDrawdown:#,##0.00}", "#FF355E");
+                AddTableCell(rowGrid, 8, $"{dp.CumulativeNetProfit:+$#,##0.00;-$#,##0.00;$0.00}", dp.CumulativeNetProfit >= 0 ? "#00E599" : "#FF355E", true);
 
-                btPropFirmsRows.Children.Add(new Border
+                btPeriodsRows.Children.Add(new Border
                 {
                     Background = SolidColorBrush.Parse("#141416"),
                     BorderBrush = SolidColorBrush.Parse("#1F1F23"),
@@ -2165,75 +3614,1208 @@ internal sealed class MainWindow : Window
             }
         }
 
-        if (btTradesRows is not null)
+        lastBacktestResult = result;
+        PopulateMetricsView(result);
+    }
+
+    private void PopulateMetricsView(BacktestResult result)
+    {
+        var days = result.DailyPerformance ?? Array.Empty<DailyPerformanceRecord>();
+        btDailyTradesSurface?.SetDays(days);
+
+        if (days.Count == 0)
         {
-            btTradesRows.Children.Clear();
-            foreach (var tr in result.Trades.Take(400))
+            if (metAvgTradesDayVal != null) metAvgTradesDayVal.Text = "—";
+            if (metAvgTradesDaySub != null) metAvgTradesDaySub.Text = "Total trades en periodo";
+            if (metExtremesTradesVal != null) metExtremesTradesVal.Text = "—";
+            if (metExtremesTradesSub != null) metExtremesTradesSub.Text = "Rango de frecuencia diaria";
+            if (metAvgPnlDayVal != null) metAvgPnlDayVal.Text = "—";
+            if (metAvgPnlDaySub != null) metAvgPnlDaySub.Text = "Ganancia / pérdida media día";
+            if (metWinningDaysVal != null) metWinningDaysVal.Text = "—";
+            if (metWinningDaysSub != null) metWinningDaysSub.Text = "Días positivos vs negativos";
+            if (metAvgDurationVal != null) metAvgDurationVal.Text = "—";
+            if (metAvgDurationSub != null) metAvgDurationSub.Text = "Tiempo de permanencia en trade";
+            metDowStack?.Children.Clear();
+            metFreqBucketsStack?.Children.Clear();
+            if (metBestDayVal != null) metBestDayVal.Text = "—";
+            if (metWorstDayVal != null) metWorstDayVal.Text = "—";
+            if (metAvgIntradayDdVal != null) metAvgIntradayDdVal.Text = "—";
+            if (metCommImpactVal != null) metCommImpactVal.Text = "—";
+            return;
+        }
+
+        int totalDays = days.Count;
+        int totalTrades = days.Sum(d => d.Trades);
+        double avgTrades = totalDays > 0 ? (double)totalTrades / totalDays : 0.0;
+        int maxTrades = days.Max(d => d.Trades);
+        int minTrades = days.Min(d => d.Trades);
+
+        double variance = days.Average(d => Math.Pow(d.Trades - avgTrades, 2));
+        double stdDev = Math.Sqrt(variance);
+
+        double totalNet = days.Sum(d => d.NetProfit);
+        double avgDailyNet = totalNet / totalDays;
+
+        var winDaysList = days.Where(d => d.NetProfit > 0).ToList();
+        var lossDaysList = days.Where(d => d.NetProfit < 0).ToList();
+        int winDays = winDaysList.Count;
+        int lossDays = lossDaysList.Count;
+        double winDaysPct = (double)winDays / totalDays * 100.0;
+
+        double avgWinDay = winDays > 0 ? winDaysList.Average(d => d.NetProfit) : 0.0;
+        double avgLossDay = lossDays > 0 ? lossDaysList.Average(d => d.NetProfit) : 0.0;
+
+        if (metAvgTradesDayVal != null && metAvgTradesDaySub != null)
+        {
+            metAvgTradesDayVal.Text = $"{avgTrades:F1} ops / día";
+            metAvgTradesDayVal.Foreground = SolidColorBrush.Parse("#FFB224");
+            metAvgTradesDaySub.Text = $"Total: {totalTrades:N0} ops en {totalDays:N0} días";
+        }
+
+        if (metExtremesTradesVal != null && metExtremesTradesSub != null)
+        {
+            metExtremesTradesVal.Text = $"Máx {maxTrades} | Mín {minTrades}";
+            metExtremesTradesSub.Text = $"Desv. Estándar: ±{stdDev:F1} ops/día";
+        }
+
+        if (metAvgPnlDayVal != null && metAvgPnlDaySub != null)
+        {
+            metAvgPnlDayVal.Text = $"{avgDailyNet:+$#,##0.00;-$#,##0.00;$0.00} / día";
+            metAvgPnlDayVal.Foreground = SolidColorBrush.Parse(avgDailyNet >= 0 ? "#00E599" : "#FF355E");
+            metAvgPnlDaySub.Text = $"Día +: {avgWinDay:+$#,##0} | Día -: {avgLossDay:-$#,##0}";
+        }
+
+        if (metWinningDaysVal != null && metWinningDaysSub != null)
+        {
+            metWinningDaysVal.Text = $"{winDaysPct:F1}% ({winDays}d / {totalDays}d)";
+            metWinningDaysVal.Foreground = SolidColorBrush.Parse(winDaysPct >= 50 ? "#00E599" : "#FF355E");
+            metWinningDaysSub.Text = $"+{winDays} Días Gan | -{lossDays} Perd";
+        }
+
+        if (metAvgDurationVal != null && metAvgDurationSub != null)
+        {
+            double avgDur = result.Summary.AverageTradeDurationMinutes;
+            metAvgDurationVal.Text = $"{avgDur:F1} min / trade";
+            metAvgDurationSub.Text = $"Exposición media por posición";
+        }
+
+        // Desglose por Día de la Semana
+        if (metDowStack != null)
+        {
+            metDowStack.Children.Clear();
+            var dowOrder = new[]
             {
+                DayOfWeek.Monday,
+                DayOfWeek.Tuesday,
+                DayOfWeek.Wednesday,
+                DayOfWeek.Thursday,
+                DayOfWeek.Friday,
+                DayOfWeek.Sunday
+            };
+
+            foreach (var dow in dowOrder)
+            {
+                var match = days.Where(d => d.DateUtc.DayOfWeek == dow).ToList();
+                if (match.Count == 0) continue;
+
+                string name = dow switch
+                {
+                    DayOfWeek.Monday => "Lunes",
+                    DayOfWeek.Tuesday => "Martes",
+                    DayOfWeek.Wednesday => "Miércoles",
+                    DayOfWeek.Thursday => "Jueves",
+                    DayOfWeek.Friday => "Viernes",
+                    DayOfWeek.Sunday => "Domingo",
+                    _ => dow.ToString()
+                };
+
+                int dCount = match.Count;
+                int dTrades = match.Sum(d => d.Trades);
+                double dAvgTrades = (double)dTrades / dCount;
+                int dWins = match.Sum(d => d.WinningTrades);
+                double dWinRate = dTrades > 0 ? (double)dWins / dTrades * 100.0 : 0.0;
+                double dNet = match.Sum(d => d.NetProfit);
+                double dAvgNet = dNet / dCount;
+
                 var rowGrid = new Grid
                 {
-                    ColumnDefinitions = new ColumnDefinitions("45,65,130,90,130,90,85,100,120,75,105,*"),
+                    ColumnDefinitions = new ColumnDefinitions("70,55,60,60,*"),
                     VerticalAlignment = VerticalAlignment.Center
                 };
+                AddTableCell(rowGrid, 0, name, "#FFFFFF", true);
+                AddTableCell(rowGrid, 1, $"{dTrades} ops", "#A1A1AA");
+                AddTableCell(rowGrid, 2, $"μ {dAvgTrades:F1}/d", "#FFB224");
+                AddTableCell(rowGrid, 3, $"{dWinRate:F1}%", dWinRate >= 50 ? "#00E599" : "#FF355E");
+                AddTableCell(rowGrid, 4, $"{dNet:+$#,##0;-$#,##0;$0} (μ {dAvgNet:+$#,##0;-$#,##0;$0})", dNet >= 0 ? "#00E599" : "#FF355E", true);
 
-                bool isWin = tr.NetProfit > 0;
-                bool isLong = string.Equals(tr.Side, "Long", StringComparison.OrdinalIgnoreCase);
-
-                AddTableCell(rowGrid, 0, $"#{tr.TradeNumber}", "#71717A", true);
-                AddTableCell(rowGrid, 1, $"{(isLong ? "LONG" : "SHORT")} x{tr.Quantity}", isLong ? "#00E599" : "#FF355E", true);
-                AddTableCell(rowGrid, 2, tr.EntryTimeUtc.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture), "#A1A1AA");
-                AddTableCell(rowGrid, 3, $"{tr.EntryPrice:N2}", "#FFFFFF");
-                AddTableCell(rowGrid, 4, tr.ExitTimeUtc.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture), "#A1A1AA");
-                AddTableCell(rowGrid, 5, $"{tr.ExitPrice:N2}", "#FFFFFF");
-                AddTableCell(rowGrid, 6, $"{tr.Points:+0.00;-0.00} ({tr.Ticks:+0;-0}t)", isWin ? "#00E599" : "#FF355E");
-                AddTableCell(rowGrid, 7, $"{tr.NetProfit:+$#,##0.00;-$#,##0.00;$0.00}", isWin ? "#00E599" : "#FF355E", true);
-                AddTableCell(rowGrid, 8, $"-${tr.MaxAdverseExcursionUsd:F0} / +${tr.MaxFavorableExcursionUsd:F0}", "#71717A");
-                AddTableCell(rowGrid, 9, tr.RMultiple.HasValue ? $"{tr.RMultiple.Value:+0.00;-0.00}R" : "—", "#A1A1AA");
-                AddTableCell(rowGrid, 10, $"{tr.CumulativeNetProfitUsd:+$#,##0.00;-$#,##0.00;$0.00}", tr.CumulativeNetProfitUsd >= 0 ? "#00E599" : "#FF355E", true);
-
-                var actionStack = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
-                actionStack.Children.Add(new TextBlock
+                metDowStack.Children.Add(new Border
                 {
-                    Text = tr.ExitReason,
-                    Foreground = SolidColorBrush.Parse("#71717A"),
-                    FontSize = 11,
-                    VerticalAlignment = VerticalAlignment.Center
-                });
-
-                var jumpBtn = new Button
-                {
-                    Content = "↗ Gráfico",
-                    Background = SolidColorBrush.Parse("#18181B"),
-                    Foreground = SolidColorBrush.Parse("#F4F4F5"),
-                    BorderBrush = SolidColorBrush.Parse("#FFFFFF"),
-                    BorderThickness = new Thickness(1),
-                    FontSize = 10.5,
-                    Padding = new Thickness(7, 2),
-                    CornerRadius = new CornerRadius(4)
-                };
-                DateTime capturedEntry = tr.EntryTimeUtc;
-                jumpBtn.Click += async (_, _) =>
-                {
-                    fromBox.Text = capturedEntry.Date.AddDays(-1).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
-                    toBox.Text = capturedEntry.Date.AddDays(2).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
-                    SwitchPage(0);
-                    await LoadMarketDataAsync();
-                };
-                actionStack.Children.Add(jumpBtn);
-                Grid.SetColumn(actionStack, 11);
-                rowGrid.Children.Add(actionStack);
-
-                btTradesRows.Children.Add(new Border
-                {
-                    Background = SolidColorBrush.Parse("#141416"),
-                    BorderBrush = SolidColorBrush.Parse("#1F1F23"),
-                    BorderThickness = new Thickness(1),
-                    CornerRadius = new CornerRadius(6),
-                    Padding = new Thickness(12, 5),
+                    Background = SolidColorBrush.Parse("#161619"),
+                    CornerRadius = new CornerRadius(4),
+                    Padding = new Thickness(6, 4),
                     Child = rowGrid
                 });
             }
         }
+
+        // Histograma de Frecuencia de Trades
+        if (metFreqBucketsStack != null)
+        {
+            metFreqBucketsStack.Children.Clear();
+            var buckets = new (string Label, Func<DailyPerformanceRecord, bool> Predicate)[]
+            {
+                ("1 trade / día", d => d.Trades == 1),
+                ("2 trades / día", d => d.Trades == 2),
+                ("3 – 4 trades", d => d.Trades >= 3 && d.Trades <= 4),
+                ("5 – 6 trades", d => d.Trades >= 5 && d.Trades <= 6),
+                ("7+ trades / día", d => d.Trades >= 7)
+            };
+
+            foreach (var (lbl, pred) in buckets)
+            {
+                int bCount = days.Count(pred);
+                double bPct = totalDays > 0 ? (double)bCount / totalDays * 100.0 : 0.0;
+
+                var bGrid = new Grid
+                {
+                    ColumnDefinitions = new ColumnDefinitions("80,*,80"),
+                    VerticalAlignment = VerticalAlignment.Center
+                };
+
+                var lblBlock = new TextBlock
+                {
+                    Text = lbl,
+                    Foreground = SolidColorBrush.Parse("#FFFFFF"),
+                    FontSize = 10.5,
+                    VerticalAlignment = VerticalAlignment.Center
+                };
+                Grid.SetColumn(lblBlock, 0);
+                bGrid.Children.Add(lblBlock);
+
+                var barTrack = new Border
+                {
+                    Background = SolidColorBrush.Parse("#222226"),
+                    Height = 8,
+                    CornerRadius = new CornerRadius(3),
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Margin = new Thickness(4, 0, 8, 0)
+                };
+
+                var barFill = new Border
+                {
+                    Background = SolidColorBrush.Parse("#00E599"),
+                    Height = 8,
+                    CornerRadius = new CornerRadius(3),
+                    HorizontalAlignment = HorizontalAlignment.Left,
+                    Width = Math.Max(2, (bPct / 100.0) * 140.0)
+                };
+                barTrack.Child = barFill;
+                Grid.SetColumn(barTrack, 1);
+                bGrid.Children.Add(barTrack);
+
+                var infoBlock = new TextBlock
+                {
+                    Text = $"{bCount} d ({bPct:F1}%)",
+                    Foreground = SolidColorBrush.Parse("#A1A1AA"),
+                    FontSize = 10,
+                    HorizontalAlignment = HorizontalAlignment.Right,
+                    VerticalAlignment = VerticalAlignment.Center
+                };
+                Grid.SetColumn(infoBlock, 2);
+                bGrid.Children.Add(infoBlock);
+
+                metFreqBucketsStack.Children.Add(new Border
+                {
+                    Background = SolidColorBrush.Parse("#161619"),
+                    CornerRadius = new CornerRadius(4),
+                    Padding = new Thickness(6, 4),
+                    Child = bGrid
+                });
+            }
+        }
+
+        // Métricas avanzadas inferiores
+        if (days.Count > 0)
+        {
+            var best = days.MaxBy(d => d.NetProfit);
+            var worst = days.MinBy(d => d.NetProfit);
+            double avgDd = days.Average(d => d.MaxIntradayDrawdown);
+            double comms = result.Summary.ClosedTradeCommissions;
+            double gross = result.Summary.GrossProfit;
+            double commPct = gross > 0 ? (comms / gross) * 100.0 : 0.0;
+
+            if (metBestDayVal != null && metBestDaySub != null && best != null)
+            {
+                metBestDayVal.Text = $"{best.NetProfit:+$#,##0.00;-$#,##0.00;$0.00}";
+                metBestDaySub.Text = $"Fecha: {best.DateUtc:yyyy-MM-dd} ({best.Trades} ops)";
+            }
+            if (metWorstDayVal != null && metWorstDaySub != null && worst != null)
+            {
+                metWorstDayVal.Text = $"{worst.NetProfit:+$#,##0.00;-$#,##0.00;$0.00}";
+                metWorstDaySub.Text = $"Fecha: {worst.DateUtc:yyyy-MM-dd} ({worst.Trades} ops)";
+            }
+            if (metAvgIntradayDdVal != null && metAvgIntradayDdSub != null)
+            {
+                metAvgIntradayDdVal.Text = $"-${avgDd:#,##0.00}";
+                metAvgIntradayDdSub.Text = $"Riesgo intradía medio por sesión";
+            }
+            if (metCommImpactVal != null && metCommImpactSub != null)
+            {
+                metCommImpactVal.Text = $"${comms:#,##0.00} ({commPct:F1}%)";
+                metCommImpactSub.Text = $"Comisiones sobre ganancia bruta";
+            }
+        }
+    }
+
+    private const string PropFirmCostColumns = "210,85,80,90,110,80,*";
+
+    // Precios aproximados por cuenta 50K (mismo orden que pfPlanCombo).
+    // BasePrice = precio normal, CouponPrice = con cupón típico, Activation = cuota al fondearse.
+    private static readonly (string Name, double BasePrice, double CouponPrice, double Activation)[] PropFirmPlanPrices =
+    {
+        ("Tradeify Select Flex 50K", 165, 99, 0),
+        ("Tradeify Select Daily 50K", 165, 99, 0),
+        ("Tradeify Growth 50K", 145, 87, 0),
+        ("Tradeify Lightning 50K", 492, 295, 0),
+        ("Topstep 50K (mensual)", 49, 49, 149),
+        ("Apex 50K", 167, 35, 140)
+    };
+
+    private int GetPropFirmAccountCount() => pfAccountsCountCombo?.SelectedIndex switch
+    {
+        0 => 5,
+        1 => 10,
+        2 => 20,
+        3 => 50,
+        4 => 100,
+        _ => 10
+    };
+
+    private void RefreshPropFirmCostTable()
+    {
+        if (pfCostTableRows is null) return;
+
+        int n = GetPropFirmAccountCount();
+        int selectedPlan = pfPlanCombo?.SelectedIndex ?? 0;
+
+        if (pfCostTitleText is not null)
+            pfCostTitleText.Text = $"COSTO DE LA CARTERA · {n} EVALUACIONES";
+
+        pfCostTableRows.Children.Clear();
+        for (int i = 0; i < PropFirmPlanPrices.Length; i++)
+        {
+            var p = PropFirmPlanPrices[i];
+            double totalBase = p.BasePrice * n;
+            double totalCoupon = p.CouponPrice * n;
+            int payoutsToRecover = (int)Math.Ceiling(totalCoupon / 1000.0);
+            bool isSelected = i == selectedPlan;
+
+            var row = new Grid
+            {
+                ColumnDefinitions = new ColumnDefinitions(PropFirmCostColumns),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            string nameHex = isSelected ? "#00E599" : "#E4E4E7";
+            AddTableCell(row, 0, (isSelected ? "▶ " : "") + p.Name, nameHex, isSelected);
+            AddTableCell(row, 1, $"${p.BasePrice:N0}", "#A1A1AA");
+            AddTableCell(row, 2, $"${p.CouponPrice:N0}", "#A1A1AA");
+            AddTableCell(row, 3, $"${totalBase:N0}", "#E4E4E7");
+            AddTableCell(row, 4, $"${totalCoupon:N0}", "#FFB224", true);
+            AddTableCell(row, 5, p.Activation > 0 ? $"${p.Activation:N0} c/u" : "$0", p.Activation > 0 ? "#FF355E" : "#71717A");
+            AddTableCell(row, 6, $"{payoutsToRecover} retiro(s)", "#38BDF8");
+
+            pfCostTableRows.Children.Add(new Border
+            {
+                Background = SolidColorBrush.Parse(isSelected ? "#0F2A22" : (i % 2 == 0 ? "#161619" : "#131316")),
+                CornerRadius = new CornerRadius(4),
+                Padding = new Thickness(6, 4),
+                Child = row
+            });
+        }
+    }
+
+    private void RunPropFirmSimulation()
+    {
+        if (pfPlanCombo is null || pfAccountsCountCombo is null || pfAccountsTableRows is null)
+            return;
+
+        int planIdx = pfPlanCombo.SelectedIndex;
+        if (planIdx < 0) planIdx = 0;
+
+        int strategyModeIdx = pfStrategyModeCombo?.SelectedIndex ?? 0;
+        if (strategyModeIdx < 0) strategyModeIdx = 0;
+
+        int numAccounts = pfAccountsCountCombo.SelectedIndex switch
+        {
+            0 => 5,
+            1 => 10,
+            2 => 20,
+            3 => 50,
+            4 => 100,
+            _ => 10
+        };
+
+        double costPerAccount = 40.0;
+        if (pfAccountPriceBox != null && double.TryParse(pfAccountPriceBox.Text, NumberStyles.Any, CultureInfo.InvariantCulture, out double parsedCost))
+            costPerAccount = Math.Max(0, parsedCost);
+
+        double activationFee = 0.0;
+        if (pfActivationPriceBox != null && double.TryParse(pfActivationPriceBox.Text, NumberStyles.Any, CultureInfo.InvariantCulture, out double parsedAct))
+            activationFee = Math.Max(0, parsedAct);
+
+        var random = new Random();
+        int evalPassedCount = 0;
+        int payoutCount = 0;
+        int blownInEvalCount = 0;
+        int blownInFundedCount = 0;
+        double totalPayouts = 0.0;
+        double totalInvested = numAccounts * costPerAccount;
+
+        var backtestTrades = lastBacktestResult?.Trades;
+        bool hasTrades = backtestTrades != null && backtestTrades.Count > 0;
+
+        var results = new List<PropFirmAccountSimResult>(numAccounts);
+
+        for (int acc = 1; acc <= numAccounts; acc++)
+        {
+            var sim = SimulateSingleAccount(acc, planIdx, strategyModeIdx, random, backtestTrades);
+            results.Add(sim);
+
+            if (sim.PassedEvaluation)
+            {
+                evalPassedCount++;
+                totalInvested += activationFee;
+            }
+            else
+            {
+                blownInEvalCount++;
+            }
+
+            if (sim.AchievedPayout)
+            {
+                payoutCount++;
+                totalPayouts += sim.PayoutReceived;
+            }
+            else if (sim.PassedEvaluation)
+            {
+                blownInFundedCount++;
+            }
+        }
+
+        double netProfitTrader = totalPayouts - totalInvested;
+        double roi = totalInvested > 0 ? (netProfitTrader / totalInvested) * 100.0 : 0.0;
+        double evalPassRate = (double)evalPassedCount / numAccounts * 100.0;
+        double payoutRate = (double)payoutCount / numAccounts * 100.0;
+
+        // 1. Update KPI Cards
+        if (pfKpiEvalPassVal != null && pfKpiEvalPassSub != null)
+        {
+            pfKpiEvalPassVal.Text = $"{evalPassRate:F1}% ({evalPassedCount}/{numAccounts})";
+            pfKpiEvalPassVal.Foreground = SolidColorBrush.Parse(evalPassRate >= 30 ? "#00E599" : "#FFFFFF");
+            pfKpiEvalPassSub.Text = $"{blownInEvalCount} quemadas en Fase 1";
+        }
+
+        if (pfKpiPayoutPassVal != null && pfKpiPayoutPassSub != null)
+        {
+            pfKpiPayoutPassVal.Text = $"{payoutRate:F1}% ({payoutCount}/{numAccounts})";
+            pfKpiPayoutPassVal.Foreground = SolidColorBrush.Parse(payoutCount > 0 ? "#00E599" : "#FF355E");
+            pfKpiPayoutPassSub.Text = $"{blownInFundedCount} quemadas en fondeada";
+        }
+
+        if (pfKpiTotalWithdrawnVal != null && pfKpiTotalWithdrawnSub != null)
+        {
+            pfKpiTotalWithdrawnVal.Text = $"{totalPayouts:+$#,##0.00;$0.00}";
+            pfKpiTotalWithdrawnVal.Foreground = SolidColorBrush.Parse(totalPayouts > 0 ? "#00E599" : "#71717A");
+            pfKpiTotalWithdrawnSub.Text = $"{payoutCount} cobros procesados";
+        }
+
+        if (pfKpiTotalCostVal != null && pfKpiTotalCostSub != null)
+        {
+            pfKpiTotalCostVal.Text = $"-${totalInvested:#,##0.00}";
+            pfKpiTotalCostSub.Text = $"Eval: ${numAccounts * costPerAccount:N0} | Act: ${evalPassedCount * activationFee:N0}";
+        }
+
+        if (pfKpiNetRoiVal != null && pfKpiNetRoiSub != null)
+        {
+            string roiSign = netProfitTrader >= 0 ? "+" : "";
+            pfKpiNetRoiVal.Text = $"{netProfitTrader:+$#,##0.00;-$#,##0.00;$0.00}";
+            pfKpiNetRoiVal.Foreground = SolidColorBrush.Parse(netProfitTrader >= 0 ? "#00E599" : "#FF355E");
+            pfKpiNetRoiSub.Text = $"Retorno: {roiSign}{roi:F1}% sobre inversión";
+        }
+
+        // 2. Update Distribution Bar and EV
+        double payoutShare = numAccounts > 0 ? (double)payoutCount / numAccounts : 0;
+        double passOnlyShare = numAccounts > 0 ? (double)blownInFundedCount / numAccounts : 0;
+        double blownEvalShare = numAccounts > 0 ? (double)blownInEvalCount / numAccounts : 0;
+
+        if (pfDistTrack != null)
+        {
+            pfDistTrack.ColumnDefinitions = new ColumnDefinitions($"{Math.Max(0.01, payoutShare * 100)}*,{Math.Max(0.01, passOnlyShare * 100)}*,{Math.Max(0.01, blownEvalShare * 100)}*");
+        }
+
+        if (pfDistributionLegend != null)
+        {
+            pfDistributionLegend.Text = $"Verde ({payoutRate:F0}%): Retiraron | Azul ({passOnlyShare * 100:F0}%): Pasaron Eval | Rojo ({blownEvalShare * 100:F0}%): Quebraron Eval";
+        }
+
+        double evPerAccount = numAccounts > 0 ? netProfitTrader / numAccounts : 0.0;
+        if (pfEvText != null)
+        {
+            string evSign = evPerAccount >= 0 ? "+" : "";
+            pfEvText.Text = $"Esperanza Matemática por cuenta: {evSign}${evPerAccount:F2} | Retorno: ${totalPayouts:N0} de ${totalInvested:N0} invertidos";
+            pfEvText.Foreground = SolidColorBrush.Parse(evPerAccount >= 0 ? "#00E599" : "#FF355E");
+        }
+
+        if (pfVerdictText != null)
+        {
+            string modeTag = strategyModeIdx switch
+            {
+                0 => "[Dubins-Savage · Punto Dulce ($500 F2 + 2.º Retiro Free Roll)]",
+                1 => "[Dubins-Savage · Retiro Mínimo ($200 F2 + 2.º Retiro Free Roll)]",
+                2 => "[Dubins-Savage · Perseguir Tope Máximo ($2,500 / Meta +$5,000)]",
+                3 => "[Aleatoria Común: $200 fijo en ambas fases (1–2 ops/día)]",
+                4 => "[Estrategia Actual · Operaciones Reales del Backtest]",
+                _ => "[Simulación Personalizada]"
+            };
+
+            if (strategyModeIdx == 4 && !hasTrades)
+            {
+                pfVerdictText.Text = "ℹ️ No hay un backtest ejecutado en el Analizador. Ve a la pestaña 'Analizador', pulsa 'Ejecutar', y regresa aquí para simular cuentas con tus operaciones históricas reales.";
+                pfVerdictText.Foreground = SolidColorBrush.Parse("#FFB224");
+            }
+            else if (netProfitTrader > 0)
+            {
+                pfVerdictText.Text = $"🟢 RESULTADO FAVORABLE {modeTag}: Lograste {payoutCount} cuenta(s) con cobro que sumaron ${totalPayouts:N2}, superando los ${totalInvested:N2} invertidos en las {numAccounts} cuentas (+{roi:F1}% ROI, Pase F1: {evalPassRate:F1}%).";
+                pfVerdictText.Foreground = SolidColorBrush.Parse("#00E599");
+            }
+            else
+            {
+                pfVerdictText.Text = $"🔴 RESULTADO NEGATIVO {modeTag}: Invertiste ${totalInvested:N2} en {numAccounts} cuentas y obtuviste ${totalPayouts:N2} en retiros ({roi:F1}% ROI, Pase F1: {evalPassRate:F1}%). El drawdown eliminó a {blownInEvalCount + blownInFundedCount} cuentas antes de cobrar.";
+                pfVerdictText.Foreground = SolidColorBrush.Parse("#FF355E");
+            }
+        }
+
+        // 3. Populate Accounts Table
+        pfAccountsTableRows.Children.Clear();
+        foreach (var sim in results)
+        {
+            var rowGrid = new Grid
+            {
+                ColumnDefinitions = new ColumnDefinitions("35,110,110,60,50,85,90,*"),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            string statusHex = sim.FinalStatus.Contains("RETIRÓ") ? "#00E599" : (sim.FinalStatus.Contains("F2") ? "#FFB224" : "#FF355E");
+            string pnlHex = sim.AccountEquity >= 0 ? "#00E599" : "#FF355E";
+            string payoutHex = sim.PayoutReceived > 0 ? "#00E599" : "#71717A";
+
+            AddTableCell(rowGrid, 0, $"#{sim.AccountNumber}", "#71717A", true);
+            AddTableCell(rowGrid, 1, sim.FinalStatus, statusHex, true);
+            AddTableCell(rowGrid, 2, sim.PhaseReached, "#A1A1AA");
+            AddTableCell(rowGrid, 3, $"{sim.DaysTraded} d", "#E4E4E7");
+            AddTableCell(rowGrid, 4, $"{sim.TotalTrades}", "#A1A1AA");
+            AddTableCell(rowGrid, 5, $"{sim.AccountEquity:+$#,##0;-$#,##0;$0}", pnlHex);
+            AddTableCell(rowGrid, 6, sim.PayoutReceived > 0 ? $"+${sim.PayoutReceived:#,##0.00}" : "$0.00", payoutHex, sim.PayoutReceived > 0);
+            AddTableCell(rowGrid, 7, sim.Notes, "#71717A");
+
+            pfAccountsTableRows.Children.Add(new Border
+            {
+                Background = SolidColorBrush.Parse(sim.AccountNumber % 2 == 0 ? "#161619" : "#131316"),
+                CornerRadius = new CornerRadius(4),
+                Padding = new Thickness(6, 4),
+                Child = rowGrid
+            });
+        }
+    }
+
+    private static PropFirmAccountSimResult SimulateSingleAccount(int accNum, int planIdx, int strategyModeIdx, Random random, IReadOnlyList<TradeRecord>? backtestTrades)
+    {
+        // planIdx:
+        // 0: Tradeify Select Flex 50K (Target 3000, DD 2000 EOD, Buffer 0, 5 win days >= 150 -> 50% payout, max $2,500 cap)
+        // 1: Tradeify Select Daily 50K (Target 3000, DD 2000 EOD, Buffer 2100 -> Daily payout above buffer)
+        // 2: Tradeify Growth 50K (Target 3000, DD 2000 EOD, DLL 1250 soft, 5 win days >= 150 + 35% consistency)
+        // 3: Tradeify Lightning 50K (Instant funded, DD 2000 EOD, 20% consistency)
+        // 4: Topstep 50K Express (Target 3000, DD 2000 EOD, 5 win days >= 150 -> 50% payout)
+        // 5: Apex 50K Full (Target 3000, DD 2500 Intraday Trailing, Buffer 2600, 10 days)
+        //
+        // strategyModeIdx:
+        // 0: Dubins-Savage · Punto Dulce ($500/día en F2 -> Retira al 5.º día + Free Roll 2.º retiro)
+        // 1: Dubins-Savage · Retiro Mínimo ($200/día en F2 -> Retira al 5.º día + Free Roll 2.º retiro)
+        // 2: Dubins-Savage · Tope Máximo ($1,000/día en F2 -> Espera acumular +$5,000 para sacar el máximo $2,500)
+        // 3: Aleatoria Estándar ($200 fijo en ambas fases, 1-2 trades/día)
+        // 4: Estrategia Actual (Trades Reales del Backtest)
+
+        bool useBacktestTrades = strategyModeIdx == 4;
+        bool hasTrades = useBacktestTrades && backtestTrades != null && backtestTrades.Count > 0;
+
+        if (useBacktestTrades && !hasTrades)
+        {
+            return new PropFirmAccountSimResult
+            {
+                AccountNumber = accNum,
+                FinalStatus = "SIN BACKTEST",
+                PhaseReached = "Inactivo",
+                DaysTraded = 0,
+                TotalTrades = 0,
+                AccountEquity = 0,
+                PayoutReceived = 0,
+                PassedEvaluation = false,
+                AchievedPayout = false,
+                Notes = "Ejecuta un backtest en el Analizador para simular con trades reales."
+            };
+        }
+
+        bool useDubinsSavage = strategyModeIdx <= 2;
+        bool chaseMaxPayout = strategyModeIdx == 2;
+        bool useSweetSpotF2 = strategyModeIdx == 0;
+        bool isInstantFunded = planIdx == 3;
+        bool passedEval = isInstantFunded;
+        bool achievedPayout = false;
+        double payout = 0.0;
+        int totalDays = 0;
+        int totalTrades = 0;
+        double finalAccountPnl = 0.0;
+        string finalStatus = "";
+        string phaseReached = isInstantFunded ? "Fase 2 (Fondeada)" : "Fase 1 (Eval)";
+        string reason = "";
+
+        // --- FASE 1: EVALUACIÓN ---
+        if (!isInstantFunded)
+        {
+            double balance = 50000;
+            double peak = 50000;
+            double target = 53000;
+            double maxDd = planIdx == 5 ? 2500 : 2000;
+            bool isIntradayTrailing = planIdx == 5;
+            double consistencyLimit = planIdx == 4 ? 0.50 : 0.40;
+            int minDays = planIdx == 2 ? 1 : (planIdx == 4 ? 2 : (planIdx == 5 ? 7 : 3));
+
+            var dailyProfits = new List<double>();
+            bool evalBlown = false;
+
+            for (int day = 1; day <= 60; day++)
+            {
+                totalDays++;
+                int tradesToday = 0;
+                double dayPnl = 0.0;
+
+                if (useBacktestTrades)
+                {
+                    tradesToday = random.Next(1, 3);
+                    for (int t = 0; t < tradesToday; t++)
+                    {
+                        var tr = backtestTrades![random.Next(backtestTrades.Count)];
+                        dayPnl += tr.NetProfit;
+                    }
+                }
+                else if (useDubinsSavage)
+                {
+                    // Dubins-Savage Bold Play: estrictamente 1 operación al día en apertura NY.
+                    // En planes EOD con 40% consistencia (3 días mín), bloque de 2 NQ con SL=98 ticks (-$980 bruto / -$988.20 neto)
+                    // y TP=102 ticks (+$1,020 bruto / +$1,011.80 neto):
+                    // 1) 2 derrotas seguidas (-$1,976.40) NO quiebran el Drawdown EOD de -$2,000 (quedan $23.60 de vida, exige 3 derrotas).
+                    // 2) 3 victorias (+$3,035.40) superan los $3,000 en 3 días exactos con 33.3% de consistencia.
+                    tradesToday = 1;
+                    bool win1 = random.NextDouble() < 0.490; // P(win) = 98 / (98 + 102) = 49.0%
+                    if (isIntradayTrailing)
+                    {
+                        dayPnl += win1 ? 445.60 : -454.40;
+                    }
+                    else
+                    {
+                        dayPnl += win1 ? 1011.80 : -988.20;
+                    }
+                }
+                else
+                {
+                    tradesToday++;
+                    bool win1 = random.NextDouble() < 0.50;
+                    if (win1)
+                    {
+                        dayPnl += 196;
+                    }
+                    else
+                    {
+                        dayPnl -= 204;
+                        if (random.NextDouble() < 0.65)
+                        {
+                            tradesToday++;
+                            bool win2 = random.NextDouble() < 0.50;
+                            dayPnl += win2 ? 196 : -204;
+                        }
+                    }
+                }
+                totalTrades += tradesToday;
+                balance += dayPnl;
+                dailyProfits.Add(Math.Max(0, dayPnl));
+
+                if (isIntradayTrailing)
+                {
+                    double intradayMfe = dayPnl > 0 ? dayPnl + random.Next(20, 80) : random.Next(0, 40);
+                    peak = Math.Max(peak, balance - dayPnl + intradayMfe);
+                    double floor = peak - maxDd;
+                    if (balance <= floor)
+                    {
+                        evalBlown = true;
+                        finalAccountPnl = balance - 50000;
+                        reason = $"Quebró por Trailing Intradía (Pico: ${peak:N0}, Suelo: ${floor:N0})";
+                        break;
+                    }
+                }
+                else
+                {
+                    peak = Math.Max(peak, balance);
+                    double floor = peak - maxDd;
+                    if (balance <= floor)
+                    {
+                        evalBlown = true;
+                        finalAccountPnl = balance - 50000;
+                        reason = $"Quebró por Drawdown EOD (-${maxDd:N0}) en día {day}";
+                        break;
+                    }
+                }
+
+                if (balance >= target && day >= minDays)
+                {
+                    double totalProf = balance - 50000;
+                    double bestDay = dailyProfits.Count > 0 ? dailyProfits.Max() : 0;
+                    if (bestDay / totalProf <= consistencyLimit)
+                    {
+                        passedEval = true;
+                        finalAccountPnl = totalProf;
+                        break;
+                    }
+                }
+            }
+
+            if (!passedEval && !evalBlown)
+            {
+                evalBlown = true;
+                finalAccountPnl = balance - 50000;
+                reason = "Tiempo límite de evaluación agotado (60 días)";
+            }
+
+            if (evalBlown)
+            {
+                finalStatus = "❌ QUEBRADA F1";
+                phaseReached = "Fase 1 (Eval)";
+                return new PropFirmAccountSimResult
+                {
+                    AccountNumber = accNum,
+                    FinalStatus = finalStatus,
+                    PhaseReached = phaseReached,
+                    DaysTraded = totalDays,
+                    TotalTrades = totalTrades,
+                    AccountEquity = finalAccountPnl,
+                    PayoutReceived = 0,
+                    PassedEvaluation = false,
+                    AchievedPayout = false,
+                    Notes = reason
+                };
+            }
+        }
+
+        // --- FASE 2: CUENTA FONDEADA ---
+        phaseReached = "Fase 2 (Fondeada)";
+        double fBalance = 50000;
+        double fPeak = 50000;
+        double fMaxDd = planIdx == 5 ? 2500 : 2000;
+        bool fIntradayTrailing = planIdx == 5;
+        int winningDaysCount = 0;
+        bool fundedBlown = false;
+        bool hadUnlockedEarlyPayout = false;
+        double maxUnlockedProfit = 0.0;
+        var fundedDailyProfits = new List<double>();
+
+        for (int day = 1; day <= 60; day++)
+        {
+            totalDays++;
+            int tradesToday = 0;
+            double dayPnl = 0.0;
+
+            if (useBacktestTrades)
+            {
+                tradesToday = random.Next(1, 3);
+                for (int t = 0; t < tradesToday; t++)
+                {
+                    var tr = backtestTrades![random.Next(backtestTrades.Count)];
+                    dayPnl += tr.NetProfit;
+                }
+            }
+            else if (useDubinsSavage)
+            {
+                tradesToday = 1;
+                if (planIdx == 1) // Select Daily (Buffer $2,100)
+                {
+                    bool win1 = random.NextDouble() < 0.50;
+                    dayPnl += win1 ? 745.60 : -754.40;
+                }
+                else if (planIdx == 3) // Lightning (20% consistencia)
+                {
+                    bool win1 = random.NextDouble() < 0.50;
+                    dayPnl += win1 ? 385.60 : -394.40;
+                }
+                else if (chaseMaxPayout) // Modo 2: Buscar Tope Máximo ($5,000 de ganancia con bloques de $1,000)
+                {
+                    bool win1 = random.NextDouble() < 0.490;
+                    dayPnl += win1 ? 1011.80 : -988.20;
+                }
+                else if (useSweetSpotF2) // Modo 0: Punto Dulce ($500 por día -> 1 NQ 100 ticks)
+                {
+                    bool win1 = random.NextDouble() < 0.50;
+                    dayPnl += win1 ? 495.90 : -504.10;
+                }
+                else // Modo 1: Retiro Mínimo Seguro ($200 por día -> 1 NQ 40 ticks)
+                {
+                    bool win1 = random.NextDouble() < 0.50;
+                    dayPnl += win1 ? 195.60 : -204.40;
+                }
+            }
+            else
+            {
+                tradesToday++;
+                bool win1 = random.NextDouble() < 0.50;
+                if (win1)
+                {
+                    dayPnl += 196;
+                }
+                else
+                {
+                    dayPnl -= 204;
+                    if (random.NextDouble() < 0.60)
+                    {
+                        tradesToday++;
+                        bool win2 = random.NextDouble() < 0.50;
+                        dayPnl += win2 ? 196 : -204;
+                    }
+                }
+            }
+
+            totalTrades += tradesToday;
+            fBalance += dayPnl;
+            fundedDailyProfits.Add(Math.Max(0, dayPnl));
+            if (dayPnl >= 150) winningDaysCount++;
+
+            if (winningDaysCount >= 5 && fBalance > 50200)
+            {
+                hadUnlockedEarlyPayout = true;
+                maxUnlockedProfit = Math.Max(maxUnlockedProfit, fBalance - 50000);
+            }
+
+            if (fIntradayTrailing)
+            {
+                double intradayMfe = dayPnl > 0 ? dayPnl + random.Next(20, 80) : random.Next(0, 40);
+                fPeak = Math.Max(fPeak, fBalance - dayPnl + intradayMfe);
+                double lockThreshold = 50000 + 2600 + 100;
+                double floor = fPeak >= lockThreshold ? 50100 : fPeak - fMaxDd;
+                if (fBalance <= floor)
+                {
+                    fundedBlown = true;
+                    finalAccountPnl = fBalance - 50000;
+                    reason = hadUnlockedEarlyPayout && chaseMaxPayout
+                        ? $"Quebró buscando Tope Máx (desperdició retiro con +${maxUnlockedProfit:N0})"
+                        : "Quebró en Fondeada por Trailing Intradía";
+                    break;
+                }
+            }
+            else
+            {
+                fPeak = Math.Max(fPeak, fBalance);
+                double lockThreshold = 50000 + fMaxDd + 100;
+                double floor = fPeak >= lockThreshold ? 50100 : fPeak - fMaxDd;
+                if (fBalance <= floor)
+                {
+                    fundedBlown = true;
+                    finalAccountPnl = fBalance - 50000;
+                    reason = hadUnlockedEarlyPayout && chaseMaxPayout
+                        ? $"Quebró buscando Tope $55K (desperdició retiro con +${maxUnlockedProfit:N0})"
+                        : $"Quebró en Fondeada por Drawdown EOD (-${fMaxDd:N0})";
+                    break;
+                }
+            }
+
+            // Payout check
+            if (planIdx == 0) // Tradeify Select Flex 50K (Tope máximo $2,500 bruto -> $2,250 neto al 90%)
+            {
+                double targetBalanceF2 = chaseMaxPayout ? 55000.0 : 50100.0;
+                if (winningDaysCount >= 5 && fBalance >= targetBalanceF2)
+                {
+                    achievedPayout = true;
+                    double profit1 = fBalance - 50000;
+                    double grossRequest1 = Math.Min(2500.0, profit1 * 0.50);
+                    double payout1 = grossRequest1 * 0.90;
+                    payout = payout1;
+                    finalAccountPnl = profit1;
+
+                    // Si estamos en Modo 0 o Modo 1 (Retiro al 5.º día), simulamos el 2.º Retiro Gratis (Free Roll) con el otro 50% que queda en la cuenta
+                    if (useDubinsSavage && !chaseMaxPayout)
+                    {
+                        double remBalance = 50000 + (profit1 - grossRequest1); // El otro 50% queda como colchón sobre $50,000
+                        int winDays2 = 0;
+                        double payout2 = 0.0;
+                        for (int d2 = 1; d2 <= 30; d2++)
+                        {
+                            totalDays++;
+                            totalTrades++;
+                            bool w2 = random.NextDouble() < 0.50;
+                            double step2 = useSweetSpotF2 ? (w2 ? 495.90 : -504.10) : (w2 ? 295.60 : -304.40);
+                            remBalance += step2;
+                            if (step2 >= 150) winDays2++;
+                            if (remBalance <= 50000) break; // Tocó el suelo de $50,000 en el Free Roll (el 1.er retiro ya está en el banco)
+                            if (winDays2 >= 5 && remBalance > 50200)
+                            {
+                                double grossRequest2 = Math.Min(2500.0, (remBalance - 50000) * 0.50);
+                                payout2 = grossRequest2 * 0.90;
+                                finalAccountPnl = profit1 + (remBalance - (50000 + profit1 - grossRequest1));
+                                break;
+                            }
+                        }
+
+                        if (payout2 > 0)
+                        {
+                            payout = payout1 + payout2;
+                            reason = $"2 Retiros: 1.º +${payout1:N0} + 2.º Free Roll +${payout2:N0} (Total: ${payout:N2})";
+                        }
+                        else
+                        {
+                            reason = $"1.er Retiro asegurado (+${payout1:N2}) · Free Roll cerró en BE ($50K)";
+                        }
+                    }
+                    else
+                    {
+                        reason = chaseMaxPayout
+                            ? $"Alcanzó Tope Máximo $55K (Saldo: ${fBalance:N0}, Retiro Máx: ${payout:N2})"
+                            : $"Cumplió 5 días ganadores (Saldo: ${fBalance:N0}, Retiro 50%: ${payout:N2})";
+                    }
+                    break;
+                }
+            }
+            else if (planIdx == 1) // Tradeify Select Daily
+            {
+                double targetDaily = chaseMaxPayout ? 54870.0 : 52100.0;
+                if (fBalance >= targetDaily)
+                {
+                    achievedPayout = true;
+                    payout = Math.Min(2500.0, fBalance - 52100) * 0.90;
+                    finalAccountPnl = fBalance - 50000;
+                    reason = $"Superó buffer de $52,100 (Retiró: ${payout:N2})";
+                    break;
+                }
+            }
+            else if (planIdx == 2) // Tradeify Growth
+            {
+                double targetGrowth = chaseMaxPayout ? 53000.0 : 52000.0;
+                if (winningDaysCount >= 5 && fBalance >= targetGrowth)
+                {
+                    double prof = fBalance - 50000;
+                    double best = fundedDailyProfits.Count > 0 ? fundedDailyProfits.Max() : 0;
+                    if (best / prof <= 0.35)
+                    {
+                        achievedPayout = true;
+                        payout = Math.Min(1500, prof * 0.50) * 0.90;
+                        finalAccountPnl = prof;
+                        reason = $"Cumplió 5 días ganadores y 35% consistencia (Retiro: ${payout:N2})";
+                        break;
+                    }
+                }
+            }
+            else if (planIdx == 3) // Tradeify Lightning
+            {
+                if (fBalance >= 52000)
+                {
+                    double prof = fBalance - 50000;
+                    double best = fundedDailyProfits.Count > 0 ? fundedDailyProfits.Max() : 0;
+                    if (best / prof <= 0.20)
+                    {
+                        achievedPayout = true;
+                        payout = Math.Min(1500, prof) * 0.90;
+                        finalAccountPnl = prof;
+                        reason = $"Cumplió meta y regla 20% consistencia (Retiro: ${payout:N2})";
+                        break;
+                    }
+                }
+            }
+            else if (planIdx == 4) // Topstep 50K Express
+            {
+                double targetTopstep = chaseMaxPayout ? 54000.0 : 50100.0;
+                if (winningDaysCount >= 5 && fBalance >= targetTopstep)
+                {
+                    achievedPayout = true;
+                    double profit1 = fBalance - 50000;
+                    double grossRequest1 = Math.Min(2000, profit1 * 0.50);
+                    payout = grossRequest1 * 0.90;
+                    finalAccountPnl = profit1;
+                    reason = $"Cumplió 5 días ganadores de $150+ (Retiro 50%: ${payout:N2})";
+                    break;
+                }
+            }
+            else if (planIdx == 5) // Apex 50K
+            {
+                if (fBalance >= 52600 && day >= 10)
+                {
+                    achievedPayout = true;
+                    payout = Math.Min(2000, fBalance - 52600) * 0.90;
+                    finalAccountPnl = fBalance - 50000;
+                    reason = $"Superó buffer de $52,600 con 10 días (Retiro: ${payout:N2})";
+                    break;
+                }
+            }
+        }
+
+        if (achievedPayout)
+        {
+            finalStatus = "✅ RETIRÓ";
+            phaseReached = "Cobro Completado";
+        }
+        else
+        {
+            finalStatus = "❌ QUEBRADA F2";
+            phaseReached = "Fase 2 (Fondeada)";
+            if (string.IsNullOrEmpty(reason))
+                reason = fundedBlown ? "Quebró en cuenta fondeada por límite de drawdown" : "No logró calificar tras 60 días de fondeo";
+        }
+
+        return new PropFirmAccountSimResult
+        {
+            AccountNumber = accNum,
+            FinalStatus = finalStatus,
+            PhaseReached = phaseReached,
+            DaysTraded = totalDays,
+            TotalTrades = totalTrades,
+            AccountEquity = finalAccountPnl,
+            PayoutReceived = payout,
+            PassedEvaluation = true,
+            AchievedPayout = achievedPayout,
+            Notes = reason
+        };
+    }
+
+    private void PopulateTradesPage(int page)
+    {
+        if (btTradesRows is null || currentAllTrades.Count == 0)
+        {
+            if (btTradesRows is not null) btTradesRows.Children.Clear();
+            if (btTradesPageInfoText is not null) btTradesPageInfoText.Text = "Mostrando operaciones: 0";
+            return;
+        }
+
+        int totalTrades = currentAllTrades.Count;
+        int totalPages = Math.Max(1, (int)Math.Ceiling(totalTrades / (double)TradesPageSize));
+        tradesCurrentPage = Math.Clamp(page, 0, totalPages - 1);
+
+        int startIdx = tradesCurrentPage * TradesPageSize;
+        int count = Math.Min(TradesPageSize, totalTrades - startIdx);
+        int endIdx = startIdx + count;
+
+        btTradesRows.Children.Clear();
+
+        for (int i = startIdx; i < endIdx; i++)
+        {
+            var tr = currentAllTrades[i];
+            var rowGrid = new Grid
+            {
+                ColumnDefinitions = new ColumnDefinitions("45,75,130,90,130,90,95,105,120,75,110,*"),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            bool isWin = tr.NetProfit > 0;
+            bool isLong = string.Equals(tr.Side, "Long", StringComparison.OrdinalIgnoreCase);
+
+            AddTableCell(rowGrid, 0, $"#{tr.TradeNumber}", "#71717A", true);
+            AddTableCell(rowGrid, 1, $"{(isLong ? "LONG" : "SHORT")} x{tr.Quantity}", isLong ? "#00E599" : "#FF355E", true);
+            AddTableCell(rowGrid, 2, tr.EntryTimeUtc.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture), "#A1A1AA");
+            AddTableCell(rowGrid, 3, $"{tr.EntryPrice:N2}", "#FFFFFF");
+            AddTableCell(rowGrid, 4, tr.ExitTimeUtc.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture), "#A1A1AA");
+            AddTableCell(rowGrid, 5, $"{tr.ExitPrice:N2}", "#FFFFFF");
+            AddTableCell(rowGrid, 6, $"{tr.Points:+0.00;-0.00} ({tr.Ticks:+0;-0}t)", isWin ? "#00E599" : "#FF355E");
+            AddTableCell(rowGrid, 7, $"{tr.NetProfit:+$#,##0.00;-$#,##0.00;$0.00}", isWin ? "#00E599" : "#FF355E", true);
+            AddTableCell(rowGrid, 8, $"-${tr.MaxAdverseExcursionUsd:F0} / +${tr.MaxFavorableExcursionUsd:F0}", "#71717A");
+            AddTableCell(rowGrid, 9, tr.RMultiple.HasValue ? $"{tr.RMultiple.Value:+0.00;-0.00}R" : "—", "#A1A1AA");
+            AddTableCell(rowGrid, 10, $"{tr.CumulativeNetProfitUsd:+$#,##0.00;-$#,##0.00;$0.00}", tr.CumulativeNetProfitUsd >= 0 ? "#00E599" : "#FF355E", true);
+
+            var actionStack = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+            actionStack.Children.Add(new TextBlock
+            {
+                Text = tr.ExitReason,
+                Foreground = SolidColorBrush.Parse("#71717A"),
+                FontSize = 11,
+                VerticalAlignment = VerticalAlignment.Center
+            });
+
+            var jumpBtn = new Button
+            {
+                Content = "↗ Gráfico",
+                Background = SolidColorBrush.Parse("#18181B"),
+                Foreground = SolidColorBrush.Parse("#F4F4F5"),
+                BorderBrush = SolidColorBrush.Parse("#FFFFFF"),
+                BorderThickness = new Thickness(1),
+                FontSize = 10.5,
+                Padding = new Thickness(7, 2),
+                CornerRadius = new CornerRadius(4),
+                Cursor = new Cursor(StandardCursorType.Hand)
+            };
+            DateTime capturedEntry = tr.EntryTimeUtc;
+            jumpBtn.Click += async (_, _) =>
+            {
+                fromBox.Text = capturedEntry.Date.AddDays(-1).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+                toBox.Text = capturedEntry.Date.AddDays(2).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+                SwitchPage(0);
+                await LoadMarketDataAsync();
+            };
+            actionStack.Children.Add(jumpBtn);
+            Grid.SetColumn(actionStack, 11);
+            rowGrid.Children.Add(actionStack);
+
+            btTradesRows.Children.Add(new Border
+            {
+                Background = SolidColorBrush.Parse(i % 2 == 0 ? "#141416" : "#17171A"),
+                BorderBrush = SolidColorBrush.Parse("#1F1F23"),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(6),
+                Padding = new Thickness(12, 5),
+                Child = rowGrid
+            });
+        }
+
+        if (btTradesPageInfoText is not null)
+        {
+            btTradesPageInfoText.Text = $"Mostrando operaciones {startIdx + 1:N0} – {endIdx:N0} de {totalTrades:N0} (Página {tradesCurrentPage + 1} de {totalPages})";
+        }
+
+        if (btTradesPrevBtn is not null) btTradesPrevBtn.IsEnabled = tradesCurrentPage > 0;
+        if (btTradesFirstBtn is not null) btTradesFirstBtn.IsEnabled = tradesCurrentPage > 0;
+        if (btTradesNextBtn is not null) btTradesNextBtn.IsEnabled = tradesCurrentPage < totalPages - 1;
+        if (btTradesLastBtn is not null) btTradesLastBtn.IsEnabled = tradesCurrentPage < totalPages - 1;
+    }
+
+    private static Button MakePageButton(string text) => new()
+    {
+        Content = text,
+        Background = SolidColorBrush.Parse("#18181B"),
+        Foreground = SolidColorBrush.Parse("#F4F4F5"),
+        BorderBrush = SolidColorBrush.Parse("#3F3F46"),
+        BorderThickness = new Thickness(1),
+        FontSize = 11,
+        Padding = new Thickness(10, 4),
+        CornerRadius = new CornerRadius(5),
+        Cursor = new Cursor(StandardCursorType.Hand)
+    };
+
+    private void PopulateNinjaTraderSummaryRows(BacktestSummary s)
+    {
+        if (btSummaryRows is null) return;
+        btSummaryRows.Children.Clear();
+
+        string FmtMoney(double val) => $"{val:+$#,##0.00;-$#,##0.00;$0.00}";
+        string FmtColor(double val) => val >= 0 ? "#00E599" : "#FF355E";
+
+        AddSummaryRow("Total Net Profit (Beneficio Neto)", FmtMoney(s.NetProfit), FmtMoney(s.LongNetProfitUsd), FmtMoney(s.ShortNetProfitUsd), FmtColor(s.NetProfit), FmtColor(s.LongNetProfitUsd), FmtColor(s.ShortNetProfitUsd));
+        AddSummaryRow("Gross Profit (Ganancia Bruta)", FmtMoney(s.GrossProfit), "—", "—", "#00E599");
+        AddSummaryRow("Gross Loss (Pérdida Bruta)", FmtMoney(-Math.Abs(s.GrossLossesUsd)), "—", "—", "#FF355E");
+        AddSummaryRow("Commission (Comisiones)", $"${s.ClosedTradeCommissions:#,##0.00}", "—", "—", "#A1A1AA");
+        AddSummaryRow("Profit Factor", s.ProfitFactor.HasValue ? s.ProfitFactor.Value.ToString("F2", CultureInfo.InvariantCulture) : "N/A", "—", "—", s.ProfitFactor >= 1.0 ? "#00E599" : "#FF355E");
+        AddSummaryRow("Payoff Ratio (Ratio Gan/Pérd)", s.PayoffRatio.HasValue ? s.PayoffRatio.Value.ToString("F2", CultureInfo.InvariantCulture) : "N/A", "—", "—");
+        AddSummaryRow("Expectancy (Esperanza / Trade)", $"{s.ExpectancyUsd:+$0.00;-$0.00;$0.00}", "—", "—", FmtColor(s.ExpectancyUsd));
+        AddSummaryRow("Average R-Multiple", s.AverageRMultiple.HasValue ? $"{s.AverageRMultiple.Value:+0.00;-0.00;0.00}R" : "N/A", "—", "—", FmtColor(s.AverageRMultiple ?? 0));
+
+        AddSummarySeparator();
+
+        AddSummaryRow("Total Trades (Total Operaciones)", $"{s.ClosedTrades}", $"{s.LongTrades}", $"{s.ShortTrades}");
+        int longWins = s.LongTrades > 0 ? (int)Math.Round(s.LongTrades * s.LongWinRate) : 0;
+        int shortWins = s.ShortTrades > 0 ? (int)Math.Round(s.ShortTrades * s.ShortWinRate) : 0;
+        int longLosses = s.LongTrades - longWins;
+        int shortLosses = s.ShortTrades - shortWins;
+
+        AddSummaryRow("Winning Trades (Ganadoras)", $"{s.WinningTrades} ({s.WinRate * 100:F1}%)", $"{longWins} ({s.LongWinRate * 100:F1}%)", $"{shortWins} ({s.ShortWinRate * 100:F1}%)", "#00E599", "#00E599", "#00E599");
+        AddSummaryRow("Losing Trades (Perdedoras)", $"{s.LosingTrades} ({(1 - s.WinRate) * 100:F1}%)", $"{longLosses}", $"{shortLosses}", "#FF355E", "#FF355E", "#FF355E");
+        AddSummaryRow("Breakeven Trades", $"{s.BreakevenTrades}", "—", "—");
+        AddSummaryRow("Win Rate (% Acierto)", $"{s.WinRate * 100:F2}%", $"{s.LongWinRate * 100:F2}%", $"{s.ShortWinRate * 100:F2}%", s.WinRate >= 0.5 ? "#00E599" : "#FF355E", s.LongWinRate >= 0.5 ? "#00E599" : "#FF355E", s.ShortWinRate >= 0.5 ? "#00E599" : "#FF355E");
+
+        AddSummarySeparator();
+
+        AddSummaryRow("Average Trade (Trade Promedio)", FmtMoney(s.ClosedTrades > 0 ? s.NetProfit / s.ClosedTrades : 0), "—", "—", FmtColor(s.NetProfit));
+        AddSummaryRow("Average Win (Ganancia Promedio)", FmtMoney(s.AverageWinUsd), "—", "—", "#00E599");
+        AddSummaryRow("Average Loss (Pérdida Promedio)", FmtMoney(s.AverageLossUsd), "—", "—", "#FF355E");
+        AddSummaryRow("Largest Winning Trade (Ganancia Mayor)", FmtMoney(s.LargestWinUsd), "—", "—", "#00E599");
+        AddSummaryRow("Largest Losing Trade (Pérdida Mayor)", FmtMoney(s.LargestLossUsd), "—", "—", "#FF355E");
+        AddSummaryRow("Max Consecutive Winners (Racha Ganadora)", $"{s.MaxConsecutiveWins}", "—", "—", "#00E599");
+        AddSummaryRow("Max Consecutive Losers (Racha Perdedora)", $"{s.MaxConsecutiveLosses}", "—", "—", "#FF355E");
+        AddSummaryRow("Average Trade Duration (Duración Media)", $"{s.AverageTradeDurationMinutes:F1} min", "—", "—");
+
+        AddSummarySeparator();
+
+        AddSummaryRow("Max Drawdown (Cerrado)", $"${s.MaxClosedTradeDrawdown:#,##0.00}", "—", "—", "#FF355E");
+        AddSummaryRow("Max Intraday Trailing Drawdown", $"${s.MaxIntradayTrailingDrawdown:#,##0.00}", "—", "—", "#FF355E");
+        AddSummaryRow("Average MAE (Excursión Adversa Media)", $"${s.AverageMaeUsd:#,##0.00}", "—", "—");
+        AddSummaryRow("Average MFE (Excursión Favorable Media)", $"${s.AverageMfeUsd:#,##0.00}", "—", "—");
+
+        AddSummarySeparator();
+
+        AddSummaryRow("Sharpe Ratio (Anualizado)", s.SharpeRatio.HasValue ? s.SharpeRatio.Value.ToString("F2", CultureInfo.InvariantCulture) : "N/A", "—", "—");
+        AddSummaryRow("Sortino Ratio (Anualizado)", s.SortinoRatio.HasValue ? s.SortinoRatio.Value.ToString("F2", CultureInfo.InvariantCulture) : "N/A", "—", "—");
+        AddSummaryRow("Recovery Factor", s.RecoveryFactor.HasValue ? s.RecoveryFactor.Value.ToString("F2", CultureInfo.InvariantCulture) : "N/A", "—", "—");
+        AddSummaryRow("Trading Days (Días Operados)", $"{s.TradingDays} días (Ganadores: {s.WinningDays} [{s.DailyWinRate * 100:F1}%], Perdedores: {s.LosingDays})", "—", "—");
+        AddSummaryRow("Best Day (Mejor Día)", FmtMoney(s.BestDayNetProfitUsd), "—", "—", "#00E599");
+        AddSummaryRow("Worst Day (Peor Día)", FmtMoney(s.WorstDayNetProfitUsd), "—", "—", "#FF355E");
+    }
+
+    private void AddSummaryRow(string label, string allVal, string longVal, string shortVal, string? allHex = null, string? longHex = null, string? shortHex = null)
+    {
+        if (btSummaryRows is null) return;
+        var grid = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("340,160,160,160"),
+            VerticalAlignment = VerticalAlignment.Center
+        };
+
+        var lbl = new TextBlock
+        {
+            Text = label,
+            Foreground = SolidColorBrush.Parse("#A1A1AA"),
+            FontSize = 11.5,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        Grid.SetColumn(lbl, 0);
+        grid.Children.Add(lbl);
+
+        void AddCol(int col, string val, string? hex)
+        {
+            var tb = new TextBlock
+            {
+                Text = val,
+                Foreground = SolidColorBrush.Parse(hex ?? "#F4F4F5"),
+                FontWeight = FontWeight.SemiBold,
+                FontSize = 11.5,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            Grid.SetColumn(tb, col);
+            grid.Children.Add(tb);
+        }
+
+        AddCol(1, allVal, allHex);
+        AddCol(2, longVal, longHex);
+        AddCol(3, shortVal, shortHex);
+
+        btSummaryRows.Children.Add(new Border
+        {
+            Background = SolidColorBrush.Parse(btSummaryRows.Children.Count % 2 == 0 ? "#121214" : "#151518"),
+            BorderBrush = SolidColorBrush.Parse("#1F1F23"),
+            BorderThickness = new Thickness(0, 0, 0, 1),
+            Padding = new Thickness(14, 6),
+            Child = grid
+        });
+    }
+
+    private void AddSummarySeparator()
+    {
+        if (btSummaryRows is null) return;
+        btSummaryRows.Children.Add(new Border
+        {
+            Height = 1,
+            Background = SolidColorBrush.Parse("#27272A"),
+            Margin = new Thickness(0, 4, 0, 4)
+        });
     }
 
     private static string GetSpanishMonthAbbrev(int month) => month switch
@@ -2245,7 +4827,7 @@ internal sealed class MainWindow : Window
         _ => month.ToString("00", CultureInfo.InvariantCulture)
     };
 
-    private static void AddTableHeader(Grid g, int col, string text)
+    internal static void AddTableHeader(Grid g, int col, string text)
     {
         var tb = new TextBlock
         {
@@ -2258,7 +4840,7 @@ internal sealed class MainWindow : Window
         g.Children.Add(tb);
     }
 
-    private static void AddTableCell(Grid g, int col, string text, string fgHex, bool bold = false)
+    internal static void AddTableCell(Grid g, int col, string text, string fgHex, bool bold = false)
     {
         var tb = new TextBlock
         {
@@ -3064,7 +5646,9 @@ internal sealed class MainWindow : Window
 
     private static readonly DateTime MinDatasetDate = new(2010, 6, 7, 0, 0, 0, DateTimeKind.Utc);
     private static readonly DateTime MaxOhlcvDatasetDate = new(2026, 10, 30, 0, 0, 0, DateTimeKind.Utc);
-    private static readonly DateTime MaxTbboDatasetDate = new(2016, 9, 21, 0, 0, 0, DateTimeKind.Utc);
+    private static DateTime MaxTbboDatasetDate => DatasetDateCatalog.LastDate(true);
+    private static string TbboYearRange => $"{DatasetDateCatalog.FirstDate(true).Year}–{MaxTbboDatasetDate.Year}";
+    private static string TbboCoverage => $"Cobertura TBBO: {DatasetDateCatalog.FirstDate(true):yyyy-MM-dd} a {MaxTbboDatasetDate:yyyy-MM-dd} UTC";
 
     private DateTime CurrentMaxDatasetDate => IsTbboMode ? MaxTbboDatasetDate : MaxOhlcvDatasetDate;
 
@@ -3075,7 +5659,7 @@ internal sealed class MainWindow : Window
         {
             if (IsTbboMode)
             {
-                schemaCoverageText.Text = "Cobertura TBBO: 2010-06-07 a 2016-09-21 UTC (229.8M ticks)";
+                schemaCoverageText.Text = TbboCoverage;
                 timeframeBox.ItemsSource = new[]
                 {
                     "100 Ticks por vela (TBBO)",
@@ -3348,9 +5932,9 @@ internal sealed class MainWindow : Window
         bool tbbo = IsTbboMode;
         string activePath = tbbo ? tbboDatasetPath : defaultDatasetPath;
 
-        if (!File.Exists(activePath))
+        if (!Workspace.DatasetExists(activePath))
         {
-            statusBanner.Text = $"No se encontró el archivo del esquema: {Path.GetFileName(activePath)}";
+            statusBanner.Text = $"No se encontraron los datos del esquema en: {activePath}";
             statusBanner.Foreground = SolidColorBrush.Parse("#FF355E");
             return;
         }
@@ -3470,10 +6054,10 @@ internal sealed class MainWindow : Window
         {
             chartSurface.SetBars(Array.Empty<Bar>(), "TBBO");
             infoBarsText.Text = "0 ticks";
-            infoRangeText.Text = "Sin ticks TBBO en el rango (Cobertura: 2010-06-07 a 2016-09-21)";
+            infoRangeText.Text = $"Sin ticks en el rango · {TbboCoverage}";
             infoPriceBoundsText.Text = "—";
             infoOrderFlowText.Text = "—";
-            statusBanner.Text = "No hay ticks TBBO en ese rango. Selecciona fechas entre 2010-06-07 y 2016-09-21.";
+            statusBanner.Text = $"No hay ticks TBBO en ese rango. {TbboCoverage}.";
             statusBanner.Foreground = SolidColorBrush.Parse("#E4E4E7");
             return;
         }
@@ -3804,10 +6388,31 @@ internal sealed class MainWindow : Window
 internal sealed class EquityCurveSurface : Control
 {
     private IReadOnlyList<TradeRecord> trades = Array.Empty<TradeRecord>();
+    private Point? hoverPos;
+
+    public EquityCurveSurface()
+    {
+        ClipToBounds = true;
+    }
 
     public void SetTrades(IReadOnlyList<TradeRecord> closedTrades)
     {
-        trades = closedTrades;
+        trades = closedTrades ?? Array.Empty<TradeRecord>();
+        hoverPos = null;
+        InvalidateVisual();
+    }
+
+    protected override void OnPointerMoved(PointerEventArgs e)
+    {
+        base.OnPointerMoved(e);
+        hoverPos = e.GetPosition(this);
+        InvalidateVisual();
+    }
+
+    protected override void OnPointerExited(PointerEventArgs e)
+    {
+        base.OnPointerExited(e);
+        hoverPos = null;
         InvalidateVisual();
     }
 
@@ -3815,7 +6420,7 @@ internal sealed class EquityCurveSurface : Control
     {
         base.Render(context);
         var bounds = new Rect(0, 0, Bounds.Width, Bounds.Height);
-        if (bounds.Width < 100 || bounds.Height < 50) return;
+        if (bounds.Width < 120 || bounds.Height < 90) return;
 
         context.DrawRectangle(
             SolidColorBrush.Parse("#09090B"),
@@ -3825,78 +6430,717 @@ internal sealed class EquityCurveSurface : Control
         if (trades.Count == 0)
         {
             var ft = new FormattedText(
-                "Ejecuta un backtest para visualizar la curva de equidad y el pico intradía trailing.",
+                "Ejecuta un backtest para visualizar la curva de capital acumulado y drawdown intradía (Estilo NinjaTrader).",
                 CultureInfo.InvariantCulture,
                 FlowDirection.LeftToRight,
                 new Typeface("Inter, Segoe UI, Sans-Serif"),
                 11.5,
                 SolidColorBrush.Parse("#71717A"));
-            context.DrawText(ft, new Point(18, bounds.Height / 2 - 8));
+            context.DrawText(ft, new Point(20, bounds.Height / 2 - 10));
             return;
         }
 
-        var plot = new Rect(16, 12, Math.Max(60, bounds.Width - 104), Math.Max(26, bounds.Height - 28));
+        const double marginLeft = 20;
+        const double marginRight = 95;
+        const double marginTop = 26;
+        const double marginBottom = 28;
+        const double panelGap = 16;
 
+        double plotW = Math.Max(60, bounds.Width - marginLeft - marginRight);
+        double totalPlotH = Math.Max(70, bounds.Height - marginTop - marginBottom - panelGap);
+
+        double upperH = Math.Round(totalPlotH * 0.70);
+        double lowerH = Math.Max(25, totalPlotH - upperH);
+
+        var upperPlot = new Rect(marginLeft, marginTop, plotW, upperH);
+        var lowerPlot = new Rect(marginLeft, upperPlot.Bottom + panelGap, plotW, lowerH);
+
+        // Precalcular picos, equidad acumulada y drawdown desde pico
+        int n = trades.Count;
+        var peaks = new double[n];
+        var drawdowns = new double[n];
+
+        double runningPeak = 0d;
         double minEq = 0d;
         double maxEq = 100d;
-        double runningPeak = 0d;
-        var peaks = new double[trades.Count];
+        double minDd = 0d;
 
-        for (int i = 0; i < trades.Count; i++)
+        for (int i = 0; i < n; i++)
         {
+            double eq = trades[i].CumulativeNetProfitUsd;
             double prevEq = i == 0 ? 0d : trades[i - 1].CumulativeNetProfitUsd;
             double tradePeak = prevEq + trades[i].MaxFavorableExcursionUsd - trades[i].Commission * 0.5;
-            runningPeak = Math.Max(runningPeak, Math.Max(tradePeak, trades[i].CumulativeNetProfitUsd));
+            runningPeak = Math.Max(runningPeak, Math.Max(tradePeak, eq));
             peaks[i] = runningPeak;
 
-            minEq = Math.Min(minEq, Math.Min(trades[i].CumulativeNetProfitUsd, prevEq - trades[i].MaxAdverseExcursionUsd));
+            double dd = eq - runningPeak;
+            drawdowns[i] = dd;
+
+            minEq = Math.Min(minEq, Math.Min(eq, prevEq - trades[i].MaxAdverseExcursionUsd));
             maxEq = Math.Max(maxEq, runningPeak);
+            minDd = Math.Min(minDd, dd);
         }
 
-        double span = Math.Max(50d, maxEq - minEq);
-        double zeroY = plot.Bottom - ((0d - minEq) / span) * plot.Height;
-        context.DrawLine(new Pen(SolidColorBrush.Parse("#222225"), 1), new Point(plot.Left, zeroY), new Point(plot.Right, zeroY));
+        if (minDd > -10d) minDd = -50d;
+        double spanEq = Math.Max(50d, maxEq - minEq);
+        double spanDd = Math.Max(10d, 0d - minDd);
 
-        double finalNet = trades[trades.Count - 1].CumulativeNetProfitUsd;
-        var eqPen = new Pen(SolidColorBrush.Parse(finalNet >= 0 ? "#00E599" : "#FF355E"), 2.0);
-        var peakPen = new Pen(SolidColorBrush.Parse("#71717A"), 1.2, new DashStyle(new double[] { 4, 4 }, 0));
+        // --- 1. PANELES Y FONDOS ---
+        var panelBg = SolidColorBrush.Parse("#0C0C0E");
+        var panelBorder = new Pen(SolidColorBrush.Parse("#1A1A1E"), 1);
+        context.DrawRectangle(panelBg, panelBorder, upperPlot, 4, 4);
+        context.DrawRectangle(panelBg, panelBorder, lowerPlot, 4, 4);
 
-        Point prevEqPt = new(plot.Left, zeroY);
-        Point prevPeakPt = new(plot.Left, zeroY);
+        // --- 2. LÍNEAS GUÍA Y ESCALA Y (PANEL SUPERIOR: CAPITAL) ---
+        var gridPen = new Pen(SolidColorBrush.Parse("#17171B"), 1);
+        var zeroPen = new Pen(SolidColorBrush.Parse("#27272A"), 1.2);
 
-        for (int i = 0; i < trades.Count; i++)
+        double zeroEqY = upperPlot.Bottom - ((0d - minEq) / spanEq) * upperPlot.Height;
+        if (zeroEqY >= upperPlot.Top && zeroEqY <= upperPlot.Bottom)
         {
-            double x = plot.Left + ((i + 1) / (double)trades.Count) * plot.Width;
-            double eqY = plot.Bottom - ((trades[i].CumulativeNetProfitUsd - minEq) / span) * plot.Height;
-            double pkY = plot.Bottom - ((peaks[i] - minEq) / span) * plot.Height;
+            context.DrawLine(zeroPen, new Point(upperPlot.Left, zeroEqY), new Point(upperPlot.Right, zeroEqY));
+            DrawText(context, "$0", new Point(upperPlot.Right + 8, zeroEqY - 6), "#A1A1AA", 9.5, true);
+        }
+
+        // Ticks de precios en panel superior
+        int gridStepsUpper = 4;
+        for (int s = 1; s <= gridStepsUpper; s++)
+        {
+            double frac = s / (double)gridStepsUpper;
+            double val = minEq + frac * spanEq;
+            double y = upperPlot.Bottom - (frac * upperPlot.Height);
+            if (Math.Abs(y - zeroEqY) > 10)
+            {
+                context.DrawLine(gridPen, new Point(upperPlot.Left, y), new Point(upperPlot.Right, y));
+                DrawText(context, $"{val:+$#,##0;-$#,##0;$0}", new Point(upperPlot.Right + 8, y - 6), "#71717A", 9.0);
+            }
+        }
+
+        // --- 3. LÍNEAS GUÍA Y ESCALA Y (PANEL INFERIOR: DRAWDOWN) ---
+        double zeroDdY = lowerPlot.Top;
+        context.DrawLine(zeroPen, new Point(lowerPlot.Left, zeroDdY), new Point(lowerPlot.Right, zeroDdY));
+        DrawText(context, "$0", new Point(lowerPlot.Right + 8, zeroDdY - 5), "#A1A1AA", 9.0, true);
+
+        double midDdY = lowerPlot.Top + 0.5 * lowerPlot.Height;
+        context.DrawLine(gridPen, new Point(lowerPlot.Left, midDdY), new Point(lowerPlot.Right, midDdY));
+        DrawText(context, $"{minDd * 0.5:-$#,##0}", new Point(lowerPlot.Right + 8, midDdY - 6), "#71717A", 9.0);
+
+        double botDdY = lowerPlot.Bottom;
+        DrawText(context, $"{minDd:-$#,##0}", new Point(lowerPlot.Right + 8, botDdY - 10), "#FF355E", 9.0);
+
+        // --- 4. TÍTULOS DE PANEL ---
+        DrawText(context, "CURVA DE CAPITAL ACUMULADO (NET PROFIT & PEAK)", new Point(upperPlot.Left + 8, upperPlot.Top + 6), "#71717A", 9.0, true);
+        DrawText(context, "DRAWDOWN INTRADÍA DESDE PICO (UNDERWATER)", new Point(lowerPlot.Left + 8, lowerPlot.Top + 5), "#EF4444", 8.5, true);
+
+        // --- 5. LÍNEAS VERTICALES DE FECHAS (EJE X) ---
+        int dateTicksCount = Math.Min(5, n);
+        for (int d = 0; d < dateTicksCount; d++)
+        {
+            int idx = (int)Math.Round(d * (n - 1) / (double)(dateTicksCount - 1));
+            double x = upperPlot.Left + (idx / (double)(n - 1)) * upperPlot.Width;
+            context.DrawLine(gridPen, new Point(x, upperPlot.Top), new Point(x, lowerPlot.Bottom));
+            string dateStr = trades[idx].ExitTimeUtc.ToString("yyyy-MM", CultureInfo.InvariantCulture);
+            DrawText(context, dateStr, new Point(x - 18, lowerPlot.Bottom + 6), "#71717A", 9.0);
+        }
+
+        // --- 6. RENDERIZADO DE CURVAS CON OPTIMIZACIÓN POR PIXEL ---
+        double finalNet = trades[n - 1].CumulativeNetProfitUsd;
+        var eqPen = new Pen(SolidColorBrush.Parse(finalNet >= 0 ? "#00E599" : "#FF355E"), 2.0);
+        var peakPen = new Pen(SolidColorBrush.Parse("#52525B"), 1.2, new DashStyle(new double[] { 3, 3 }, 0));
+        var ddPen = new Pen(SolidColorBrush.Parse("#EF4444"), 1.6);
+
+        Point prevEqPt = new(upperPlot.Left, zeroEqY);
+        Point prevPeakPt = new(upperPlot.Left, zeroEqY);
+        Point prevDdPt = new(lowerPlot.Left, zeroDdY);
+
+        int pixelWidth = (int)Math.Max(10, upperPlot.Width);
+        int step = Math.Max(1, n / (pixelWidth * 2));
+
+        for (int i = 0; i < n; i += step)
+        {
+            double x = upperPlot.Left + (i / (double)(n - 1)) * upperPlot.Width;
+            double eqY = upperPlot.Bottom - ((trades[i].CumulativeNetProfitUsd - minEq) / spanEq) * upperPlot.Height;
+            double pkY = upperPlot.Bottom - ((peaks[i] - minEq) / spanEq) * upperPlot.Height;
+            double ddY = lowerPlot.Top + ((0d - drawdowns[i]) / spanDd) * lowerPlot.Height;
 
             var eqPt = new Point(x, eqY);
             var pkPt = new Point(x, pkY);
+            var ddPt = new Point(x, ddY);
 
-            context.DrawLine(peakPen, prevPeakPt, pkPt);
-            context.DrawLine(eqPen, prevEqPt, eqPt);
+            if (i > 0)
+            {
+                context.DrawLine(peakPen, prevPeakPt, pkPt);
+                context.DrawLine(eqPen, prevEqPt, eqPt);
+                context.DrawLine(ddPen, prevDdPt, ddPt);
+            }
 
             prevEqPt = eqPt;
             prevPeakPt = pkPt;
+            prevDdPt = ddPt;
         }
 
-        DrawLabel(context, $"{maxEq:+$#,##0;-$#,##0;$0}", new Point(plot.Right + 8, plot.Top - 2), "#FFFFFF");
-        DrawLabel(context, "$0", new Point(plot.Right + 8, Math.Clamp(zeroY - 7, plot.Top, plot.Bottom - 12)), "#71717A");
-        if (minEq < 0)
-            DrawLabel(context, $"{minEq:+$#,##0;-$#,##0;$0}", new Point(plot.Right + 8, plot.Bottom - 12), "#FF355E");
+        if ((n - 1) % step != 0)
+        {
+            double lastX = upperPlot.Right;
+            double lastEqY = upperPlot.Bottom - ((trades[n - 1].CumulativeNetProfitUsd - minEq) / spanEq) * upperPlot.Height;
+            double lastPkY = upperPlot.Bottom - ((peaks[n - 1] - minEq) / spanEq) * upperPlot.Height;
+            double lastDdY = lowerPlot.Top + ((0d - drawdowns[n - 1]) / spanDd) * lowerPlot.Height;
+
+            var lastEqPt = new Point(lastX, lastEqY);
+            var lastPkPt = new Point(lastX, lastPkY);
+            var lastDdPt = new Point(lastX, lastDdY);
+
+            context.DrawLine(peakPen, prevPeakPt, lastPkPt);
+            context.DrawLine(eqPen, prevEqPt, lastEqPt);
+            context.DrawLine(ddPen, prevDdPt, lastDdPt);
+        }
+
+        // --- 7. CURSOR INTERACTIVO & TOOLTIP FLOTANTE (ESTILO NINJATRADER) ---
+        if (hoverPos.HasValue && hoverPos.Value.X >= upperPlot.Left && hoverPos.Value.X <= upperPlot.Right)
+        {
+            double relX = (hoverPos.Value.X - upperPlot.Left) / upperPlot.Width;
+            int hIdx = (int)Math.Clamp(Math.Round(relX * (n - 1)), 0, n - 1);
+            var tr = trades[hIdx];
+
+            double curX = upperPlot.Left + (hIdx / (double)(n - 1)) * upperPlot.Width;
+            double curEqY = upperPlot.Bottom - ((tr.CumulativeNetProfitUsd - minEq) / spanEq) * upperPlot.Height;
+            double curDdY = lowerPlot.Top + ((0d - drawdowns[hIdx]) / spanDd) * lowerPlot.Height;
+
+            // Guía vertical
+            var guidePen = new Pen(SolidColorBrush.Parse("#71717A"), 1.0, new DashStyle(new double[] { 2, 2 }, 0));
+            context.DrawLine(guidePen, new Point(curX, upperPlot.Top), new Point(curX, lowerPlot.Bottom));
+
+            // Marcador en curva de equidad
+            var eqMarkerBrush = SolidColorBrush.Parse(tr.NetProfit >= 0 ? "#00E599" : "#FF355E");
+            context.DrawEllipse(eqMarkerBrush, new Pen(Brushes.White, 1.5), new Point(curX, curEqY), 4.5, 4.5);
+
+            // Marcador en curva de drawdown
+            context.DrawEllipse(SolidColorBrush.Parse("#EF4444"), new Pen(Brushes.White, 1.5), new Point(curX, curDdY), 4.0, 4.0);
+
+            // Caja de inspección flotante (Tooltip)
+            double tipW = 230;
+            double tipH = 112;
+            double tipX = (curX + 14 + tipW > bounds.Width - 10) ? curX - 14 - tipW : curX + 14;
+            double tipY = Math.Clamp(hoverPos.Value.Y - 50, upperPlot.Top + 4, bounds.Height - tipH - 12);
+
+            var tipRect = new Rect(tipX, tipY, tipW, tipH);
+            context.DrawRectangle(
+                SolidColorBrush.Parse("#161619"),
+                new Pen(SolidColorBrush.Parse("#3F3F46"), 1),
+                tipRect, 6, 6);
+
+            double ty = tipY + 7;
+            DrawText(context, $"Trade #{tr.TradeNumber} · {tr.ExitTimeUtc:yyyy-MM-dd HH:mm}", new Point(tipX + 10, ty), "#FFFFFF", 10.0, true);
+            ty += 17;
+            DrawText(context, $"Pos: {tr.Side} x{tr.Quantity} · Salida: {tr.ExitReason}", new Point(tipX + 10, ty), "#A1A1AA", 9.0);
+            ty += 16;
+            string pnlHex = tr.NetProfit >= 0 ? "#00E599" : "#FF355E";
+            DrawText(context, $"PnL: {tr.NetProfit:+$#,##0.00;-$#,##0.00;$0.00} ({tr.Points:+#0.00;-#0.00;0.00} pts)", new Point(tipX + 10, ty), pnlHex, 10.0, true);
+            ty += 18;
+            DrawText(context, $"Equidad Acumulada: {tr.CumulativeNetProfitUsd:+$#,##0.00;-$#,##0.00;$0.00}", new Point(tipX + 10, ty), "#FFFFFF", 9.5);
+            ty += 16;
+            DrawText(context, $"Drawdown: {drawdowns[hIdx]:-$#,##0.00;$0.00} | Pico: ${peaks[hIdx]:#,##0}", new Point(tipX + 10, ty), "#EF4444", 9.0);
+            ty += 15;
+            DrawText(context, $"MAE: -${tr.MaxAdverseExcursionUsd:#,##0}  |  MFE: +${tr.MaxFavorableExcursionUsd:#,##0}", new Point(tipX + 10, ty), "#71717A", 8.5);
+        }
     }
 
-    private static void DrawLabel(DrawingContext context, string text, Point pt, string hex)
+    private static void DrawText(DrawingContext context, string text, Point pt, string hex, double size, bool bold = false)
     {
         var ft = new FormattedText(
             text,
             CultureInfo.InvariantCulture,
             FlowDirection.LeftToRight,
-            new Typeface("Inter, Segoe UI, Sans-Serif"),
-            10,
+            new Typeface("Inter, Segoe UI, Sans-Serif", FontStyle.Normal, bold ? FontWeight.Bold : FontWeight.Normal),
+            size,
             SolidColorBrush.Parse(hex));
         context.DrawText(ft, pt);
     }
+}
+
+internal sealed class DailyTradesChartSurface : Control
+{
+    private IReadOnlyList<DailyPerformanceRecord> days = Array.Empty<DailyPerformanceRecord>();
+    private Point? hoverPos;
+
+    public DailyTradesChartSurface()
+    {
+        ClipToBounds = true;
+    }
+
+    public void SetDays(IReadOnlyList<DailyPerformanceRecord>? dailyRecords)
+    {
+        days = dailyRecords ?? Array.Empty<DailyPerformanceRecord>();
+        hoverPos = null;
+        InvalidateVisual();
+    }
+
+    protected override void OnPointerMoved(PointerEventArgs e)
+    {
+        base.OnPointerMoved(e);
+        hoverPos = e.GetPosition(this);
+        InvalidateVisual();
+    }
+
+    protected override void OnPointerExited(PointerEventArgs e)
+    {
+        base.OnPointerExited(e);
+        hoverPos = null;
+        InvalidateVisual();
+    }
+
+    public override void Render(DrawingContext context)
+    {
+        base.Render(context);
+        var bounds = new Rect(0, 0, Bounds.Width, Bounds.Height);
+        if (bounds.Width < 100 || bounds.Height < 70) return;
+
+        context.DrawRectangle(
+            SolidColorBrush.Parse("#09090B"),
+            new Pen(SolidColorBrush.Parse("#222225"), 1),
+            bounds, 8, 8);
+
+        if (days.Count == 0)
+        {
+            var ft = new FormattedText(
+                "Ejecuta un backtest para visualizar la distribución y frecuencia de trades diarios.",
+                CultureInfo.InvariantCulture,
+                FlowDirection.LeftToRight,
+                new Typeface("Inter, Segoe UI, Sans-Serif"),
+                11.5,
+                SolidColorBrush.Parse("#71717A"));
+            context.DrawText(ft, new Point(20, bounds.Height / 2 - 10));
+            return;
+        }
+
+        const double marginLeft = 40;
+        const double marginRight = 75;
+        const double marginTop = 28;
+        const double marginBottom = 28;
+
+        double plotW = Math.Max(60, bounds.Width - marginLeft - marginRight);
+        double plotH = Math.Max(50, bounds.Height - marginTop - marginBottom);
+        var plotRect = new Rect(marginLeft, marginTop, plotW, plotH);
+
+        // Panel background
+        context.DrawRectangle(
+            SolidColorBrush.Parse("#0C0C0E"),
+            new Pen(SolidColorBrush.Parse("#1A1A1E"), 1),
+            plotRect, 4, 4);
+
+        // Title
+        DrawText(context, "FRECUENCIA DE TRADES DIARIOS (BARRAS) & LÍNEA DE PROMEDIO", new Point(plotRect.Left + 8, plotRect.Top + 6), "#71717A", 9.0, true);
+
+        int maxTrades = Math.Max(4, days.Max(d => d.Trades));
+        if (maxTrades % 2 != 0) maxTrades++;
+
+        int totalTrades = days.Sum(d => d.Trades);
+        double avgTrades = days.Count > 0 ? (double)totalTrades / days.Count : 0.0;
+
+        // Grid lines
+        var gridPen = new Pen(SolidColorBrush.Parse("#17171B"), 1);
+        int gridSteps = 4;
+        for (int s = 1; s <= gridSteps; s++)
+        {
+            double frac = s / (double)gridSteps;
+            int val = (int)Math.Round(frac * maxTrades);
+            double y = plotRect.Bottom - (frac * plotRect.Height);
+            context.DrawLine(gridPen, new Point(plotRect.Left, y), new Point(plotRect.Right, y));
+            DrawText(context, $"{val} ops", new Point(plotRect.Right + 8, y - 5), "#71717A", 8.5);
+        }
+
+        // Zero line
+        var zeroPen = new Pen(SolidColorBrush.Parse("#27272A"), 1.2);
+        context.DrawLine(zeroPen, new Point(plotRect.Left, plotRect.Bottom), new Point(plotRect.Right, plotRect.Bottom));
+        DrawText(context, "0 ops", new Point(plotRect.Right + 8, plotRect.Bottom - 5), "#A1A1AA", 8.5, true);
+
+        // Bars
+        int n = days.Count;
+        double barSlotW = plotW / n;
+        double barW = Math.Max(1.0, barSlotW - (n > 100 ? 0.3 : 1.2));
+        var winBrush = SolidColorBrush.Parse("#00E599");
+        var lossBrush = SolidColorBrush.Parse("#FF355E");
+        var evenBrush = SolidColorBrush.Parse("#71717A");
+
+        for (int i = 0; i < n; i++)
+        {
+            var dp = days[i];
+            if (dp.Trades <= 0) continue;
+            double x = plotRect.Left + (i / (double)n) * plotW;
+            double h = (dp.Trades / (double)maxTrades) * plotRect.Height;
+            double y = plotRect.Bottom - h;
+            var brush = dp.NetProfit > 0 ? winBrush : (dp.NetProfit < 0 ? lossBrush : evenBrush);
+            context.DrawRectangle(brush, null, new Rect(x, y, Math.Max(1.0, barW), Math.Max(1.0, h)));
+        }
+
+        // Horizontal Average Line
+        double avgY = plotRect.Bottom - (avgTrades / (double)maxTrades) * plotRect.Height;
+        if (avgY >= plotRect.Top && avgY <= plotRect.Bottom)
+        {
+            var avgPen = new Pen(SolidColorBrush.Parse("#FFB224"), 1.8, new DashStyle(new double[] { 4, 3 }, 0));
+            context.DrawLine(avgPen, new Point(plotRect.Left, avgY), new Point(plotRect.Right, avgY));
+
+            var pillRect = new Rect(plotRect.Right + 4, avgY - 9, 68, 18);
+            context.DrawRectangle(SolidColorBrush.Parse("#2A2008"), new Pen(SolidColorBrush.Parse("#FFB224"), 1), pillRect, 4, 4);
+            DrawText(context, $"μ {avgTrades:F1}/d", new Point(pillRect.Left + 5, pillRect.Top + 3), "#FFB224", 9.0, true);
+        }
+
+        // Date markers (X-axis)
+        int dateTicksCount = Math.Min(5, n);
+        for (int d = 0; d < dateTicksCount; d++)
+        {
+            int idx = (int)Math.Round(d * (n - 1) / (double)(dateTicksCount - 1));
+            double x = plotRect.Left + (idx / (double)(n - 1)) * plotRect.Width;
+            context.DrawLine(gridPen, new Point(x, plotRect.Top), new Point(x, plotRect.Bottom));
+            string dateStr = days[idx].DateUtc.ToString("yyyy-MM", CultureInfo.InvariantCulture);
+            DrawText(context, dateStr, new Point(x - 18, plotRect.Bottom + 5), "#71717A", 8.5);
+        }
+
+        // Hover tooltip & cursor
+        if (hoverPos.HasValue && hoverPos.Value.X >= plotRect.Left && hoverPos.Value.X <= plotRect.Right)
+        {
+            int hIdx = (int)Math.Clamp(Math.Floor((hoverPos.Value.X - plotRect.Left) / plotW * n), 0, n - 1);
+            var hDay = days[hIdx];
+
+            double curX = plotRect.Left + (hIdx / (double)n) * plotW;
+            double curH = (hDay.Trades / (double)maxTrades) * plotRect.Height;
+            double curBarTop = plotRect.Bottom - curH;
+
+            var guidePen = new Pen(SolidColorBrush.Parse("#A1A1AA"), 1.0, new DashStyle(new double[] { 2, 2 }, 0));
+            context.DrawLine(guidePen, new Point(curX + barW / 2, plotRect.Top), new Point(curX + barW / 2, plotRect.Bottom));
+
+            var dotBrush = hDay.NetProfit >= 0 ? winBrush : lossBrush;
+            context.DrawEllipse(dotBrush, new Pen(Brushes.White, 1.5), new Point(curX + barW / 2, curBarTop), 3.5, 3.5);
+
+            double tipW = 215;
+            double tipH = 96;
+            double tipX = (curX + 12 + tipW > bounds.Width - 10) ? curX - 12 - tipW : curX + 12;
+            double tipY = Math.Clamp(hoverPos.Value.Y - 45, plotRect.Top + 4, bounds.Height - tipH - 8);
+
+            context.DrawRectangle(
+                SolidColorBrush.Parse("#161619"),
+                new Pen(SolidColorBrush.Parse("#3F3F46"), 1),
+                new Rect(tipX, tipY, tipW, tipH), 6, 6);
+
+            double ty = tipY + 6;
+            DrawText(context, $"{hDay.DateUtc:yyyy-MM-dd (dddd)}", new Point(tipX + 8, ty), "#FFFFFF", 9.5, true);
+            ty += 16;
+            double diff = hDay.Trades - avgTrades;
+            string diffSign = diff >= 0 ? "+" : "";
+            DrawText(context, $"Operaciones: {hDay.Trades} ops ({diffSign}{diff:F1} vs media)", new Point(tipX + 8, ty), "#FFB224", 9.0, true);
+            ty += 15;
+            DrawText(context, $"Desglose: +{hDay.WinningTrades} Gan / -{hDay.LosingTrades} Perd", new Point(tipX + 8, ty), "#A1A1AA", 8.5);
+            ty += 15;
+            string dayPnlHex = hDay.NetProfit >= 0 ? "#00E599" : "#FF355E";
+            DrawText(context, $"P&L Neto Día: {hDay.NetProfit:+$#,##0.00;-$#,##0.00;$0.00}", new Point(tipX + 8, ty), dayPnlHex, 9.5, true);
+            ty += 15;
+            DrawText(context, $"DD Intradía: -${hDay.MaxIntradayDrawdown:#,##0.00}", new Point(tipX + 8, ty), "#FF355E", 8.5);
+        }
+    }
+
+    private static void DrawText(DrawingContext context, string text, Point pt, string hex, double size, bool bold = false)
+    {
+        var ft = new FormattedText(
+            text,
+            CultureInfo.InvariantCulture,
+            FlowDirection.LeftToRight,
+            new Typeface("Inter, Segoe UI, Sans-Serif", FontStyle.Normal, bold ? FontWeight.Bold : FontWeight.Normal),
+            size,
+            SolidColorBrush.Parse(hex));
+        context.DrawText(ft, pt);
+    }
+}
+
+internal sealed class MetricsWindow : Window
+{
+    public MetricsWindow(BacktestResult result)
+    {
+        Title = $"Métricas Detalladas & Frecuencia de Trades · {result.Configuration.Strategy} ({result.Configuration.Instrument})";
+        Width = 1180;
+        Height = 780;
+        MinWidth = 900;
+        MinHeight = 560;
+        Background = SolidColorBrush.Parse("#09090B");
+
+        Content = BuildContent(result);
+    }
+
+    private Control BuildContent(BacktestResult result)
+    {
+        var days = result.DailyPerformance ?? Array.Empty<DailyPerformanceRecord>();
+        int totalDays = days.Count;
+        int totalTrades = days.Sum(d => d.Trades);
+        double avgTrades = totalDays > 0 ? (double)totalTrades / totalDays : 0.0;
+        int maxTrades = totalDays > 0 ? days.Max(d => d.Trades) : 0;
+        int minTrades = totalDays > 0 ? days.Min(d => d.Trades) : 0;
+        double stdDev = totalDays > 0 ? Math.Sqrt(days.Average(d => Math.Pow(d.Trades - avgTrades, 2))) : 0.0;
+        double avgDailyNet = totalDays > 0 ? days.Average(d => d.NetProfit) : 0.0;
+        var winDaysList = days.Where(d => d.NetProfit > 0).ToList();
+        var lossDaysList = days.Where(d => d.NetProfit < 0).ToList();
+        int winDays = winDaysList.Count;
+        int lossDays = lossDaysList.Count;
+        double winDaysPct = totalDays > 0 ? (double)winDays / totalDays * 100.0 : 0.0;
+        double avgWinDay = winDays > 0 ? winDaysList.Average(d => d.NetProfit) : 0.0;
+        double avgLossDay = lossDays > 0 ? lossDaysList.Average(d => d.NetProfit) : 0.0;
+
+        // Header
+        var headerBorder = new Border
+        {
+            Background = SolidColorBrush.Parse("#161618"),
+            BorderBrush = SolidColorBrush.Parse("#27272A"),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(6),
+            Padding = new Thickness(14, 10),
+            Margin = new Thickness(0, 0, 0, 10),
+            Child = new StackPanel
+            {
+                Spacing = 2,
+                Children =
+                {
+                    new TextBlock
+                    {
+                        Text = $"MÉTRICAS & FRECUENCIA DE TRADES · {result.Configuration.Strategy.ToUpperInvariant()}",
+                        Foreground = SolidColorBrush.Parse("#FFFFFF"),
+                        FontWeight = FontWeight.Bold,
+                        FontSize = 13
+                    },
+                    new TextBlock
+                    {
+                        Text = $"Instrumento: {result.Configuration.Instrument} | Total Días: {totalDays:N0} | Total Trades: {totalTrades:N0} | P&L Neto: {result.Summary.NetProfit:+$#,##0.00;-$#,##0.00;$0.00}",
+                        Foreground = SolidColorBrush.Parse("#A1A1AA"),
+                        FontSize = 11
+                    }
+                }
+            }
+        };
+
+        // 5 KPI Cards
+        var kpiGrid = new UniformGrid { Columns = 5, Margin = new Thickness(0, 0, 0, 10) };
+        kpiGrid.Children.Add(MainWindow.MakeDynamicKpiCard("PROMEDIO TRADES / DÍA", $"{avgTrades:F1} ops / día", $"Total: {totalTrades:N0} ops en {totalDays:N0} días", "#FFB224", out _, out _));
+        kpiGrid.Children.Add(MainWindow.MakeDynamicKpiCard("MÁX / MÍN EN UN DÍA", $"Máx {maxTrades} | Mín {minTrades}", $"Desv. Estándar: ±{stdDev:F1} ops/día", "#FFFFFF", out _, out _));
+        kpiGrid.Children.Add(MainWindow.MakeDynamicKpiCard("P&L MEDIO DIARIO", $"{avgDailyNet:+$#,##0.00;-$#,##0.00;$0.00} / día", $"Día +: {avgWinDay:+$#,##0} | Día -: {avgLossDay:-$#,##0}", avgDailyNet >= 0 ? "#00E599" : "#FF355E", out _, out _));
+        kpiGrid.Children.Add(MainWindow.MakeDynamicKpiCard("CONSISTENCIA DIARIA", $"{winDaysPct:F1}% ({winDays}d / {totalDays}d)", $"+{winDays} Días Gan | -{lossDays} Perd", winDaysPct >= 50 ? "#00E599" : "#FF355E", out _, out _));
+        kpiGrid.Children.Add(MainWindow.MakeDynamicKpiCard("DURACIÓN MEDIA", $"{result.Summary.AverageTradeDurationMinutes:F1} min / trade", "Exposición media por posición", "#E4E4E7", out _, out _));
+
+        // Center split
+        var centerGrid = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("60*,10,40*"),
+            Margin = new Thickness(0, 0, 0, 10)
+        };
+
+        var chart = new DailyTradesChartSurface { Height = 320, MinHeight = 260 };
+        chart.SetDays(days);
+        var chartBorder = new Border
+        {
+            Background = SolidColorBrush.Parse("#0D0D0E"),
+            BorderBrush = SolidColorBrush.Parse("#1F1F23"),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(8),
+            Child = chart
+        };
+        Grid.SetColumn(chartBorder, 0);
+        centerGrid.Children.Add(chartBorder);
+
+        // Right side
+        var rightStack = new StackPanel { Spacing = 8 };
+
+        // DOW Card
+        var dowRows = new StackPanel { Spacing = 3 };
+        var dowHeaderGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("70,55,60,60,*") };
+        MainWindow.AddTableHeader(dowHeaderGrid, 0, "Día");
+        MainWindow.AddTableHeader(dowHeaderGrid, 1, "Trades");
+        MainWindow.AddTableHeader(dowHeaderGrid, 2, "Media/D");
+        MainWindow.AddTableHeader(dowHeaderGrid, 3, "% Win");
+        MainWindow.AddTableHeader(dowHeaderGrid, 4, "P&L Neto Total");
+
+        var dowOrder = new[]
+        {
+            DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday, DayOfWeek.Thursday, DayOfWeek.Friday, DayOfWeek.Sunday
+        };
+        foreach (var dow in dowOrder)
+        {
+            var match = days.Where(d => d.DateUtc.DayOfWeek == dow).ToList();
+            if (match.Count == 0) continue;
+            string name = dow switch
+            {
+                DayOfWeek.Monday => "Lunes", DayOfWeek.Tuesday => "Martes", DayOfWeek.Wednesday => "Miércoles",
+                DayOfWeek.Thursday => "Jueves", DayOfWeek.Friday => "Viernes", DayOfWeek.Sunday => "Domingo",
+                _ => dow.ToString()
+            };
+            int dCount = match.Count;
+            int dTrades = match.Sum(d => d.Trades);
+            double dAvgTrades = (double)dTrades / dCount;
+            int dWins = match.Sum(d => d.WinningTrades);
+            double dWinRate = dTrades > 0 ? (double)dWins / dTrades * 100.0 : 0.0;
+            double dNet = match.Sum(d => d.NetProfit);
+            double dAvgNet = dNet / dCount;
+
+            var rGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("70,55,60,60,*"), VerticalAlignment = VerticalAlignment.Center };
+            MainWindow.AddTableCell(rGrid, 0, name, "#FFFFFF", true);
+            MainWindow.AddTableCell(rGrid, 1, $"{dTrades} ops", "#A1A1AA");
+            MainWindow.AddTableCell(rGrid, 2, $"μ {dAvgTrades:F1}/d", "#FFB224");
+            MainWindow.AddTableCell(rGrid, 3, $"{dWinRate:F1}%", dWinRate >= 50 ? "#00E599" : "#FF355E");
+            MainWindow.AddTableCell(rGrid, 4, $"{dNet:+$#,##0;-$#,##0;$0} (μ {dAvgNet:+$#,##0;-$#,##0;$0})", dNet >= 0 ? "#00E599" : "#FF355E", true);
+
+            dowRows.Children.Add(new Border
+            {
+                Background = SolidColorBrush.Parse("#161619"),
+                CornerRadius = new CornerRadius(4),
+                Padding = new Thickness(6, 4),
+                Child = rGrid
+            });
+        }
+
+        var dowCard = new Border
+        {
+            Background = SolidColorBrush.Parse("#141416"),
+            BorderBrush = SolidColorBrush.Parse("#27272A"),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(10, 8),
+            Child = new StackPanel
+            {
+                Spacing = 5,
+                Children =
+                {
+                    new TextBlock
+                    {
+                        Text = "DESGLOSE POR DÍA DE LA SEMANA",
+                        Foreground = SolidColorBrush.Parse("#A1A1AA"),
+                        FontSize = 10,
+                        FontWeight = FontWeight.Bold,
+                        Margin = new Thickness(0, 0, 0, 2)
+                    },
+                    new Border
+                    {
+                        Background = SolidColorBrush.Parse("#18181B"),
+                        BorderThickness = new Thickness(0, 0, 0, 1),
+                        BorderBrush = SolidColorBrush.Parse("#27272A"),
+                        Padding = new Thickness(4, 4),
+                        Child = dowHeaderGrid
+                    },
+                    dowRows
+                }
+            }
+        };
+        rightStack.Children.Add(dowCard);
+
+        // Frequency Buckets
+        var freqRows = new StackPanel { Spacing = 4 };
+        var buckets = new (string Label, Func<DailyPerformanceRecord, bool> Predicate)[]
+        {
+            ("1 trade / día", d => d.Trades == 1),
+            ("2 trades / día", d => d.Trades == 2),
+            ("3 – 4 trades", d => d.Trades >= 3 && d.Trades <= 4),
+            ("5 – 6 trades", d => d.Trades >= 5 && d.Trades <= 6),
+            ("7+ trades / día", d => d.Trades >= 7)
+        };
+        foreach (var (lbl, pred) in buckets)
+        {
+            int bCount = days.Count(pred);
+            double bPct = totalDays > 0 ? (double)bCount / totalDays * 100.0 : 0.0;
+            var bGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("80,*,80"), VerticalAlignment = VerticalAlignment.Center };
+            var lblBlock = new TextBlock { Text = lbl, Foreground = SolidColorBrush.Parse("#FFFFFF"), FontSize = 10.5, VerticalAlignment = VerticalAlignment.Center };
+            Grid.SetColumn(lblBlock, 0);
+            bGrid.Children.Add(lblBlock);
+
+            var barTrack = new Border { Background = SolidColorBrush.Parse("#222226"), Height = 8, CornerRadius = new CornerRadius(3), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(4, 0, 8, 0) };
+            var barFill = new Border { Background = SolidColorBrush.Parse("#00E599"), Height = 8, CornerRadius = new CornerRadius(3), HorizontalAlignment = HorizontalAlignment.Left, Width = Math.Max(2, (bPct / 100.0) * 140.0) };
+            barTrack.Child = barFill;
+            Grid.SetColumn(barTrack, 1);
+            bGrid.Children.Add(barTrack);
+
+            var infoBlock = new TextBlock { Text = $"{bCount} d ({bPct:F1}%)", Foreground = SolidColorBrush.Parse("#A1A1AA"), FontSize = 10, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
+            Grid.SetColumn(infoBlock, 2);
+            bGrid.Children.Add(infoBlock);
+
+            freqRows.Children.Add(new Border
+            {
+                Background = SolidColorBrush.Parse("#161619"),
+                CornerRadius = new CornerRadius(4),
+                Padding = new Thickness(6, 4),
+                Child = bGrid
+            });
+        }
+
+        var freqCard = new Border
+        {
+            Background = SolidColorBrush.Parse("#141416"),
+            BorderBrush = SolidColorBrush.Parse("#27272A"),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(10, 8),
+            Child = new StackPanel
+            {
+                Spacing = 5,
+                Children =
+                {
+                    new TextBlock
+                    {
+                        Text = "DISTRIBUCIÓN DE FRECUENCIA DE TRADES / DÍA",
+                        Foreground = SolidColorBrush.Parse("#A1A1AA"),
+                        FontSize = 10,
+                        FontWeight = FontWeight.Bold,
+                        Margin = new Thickness(0, 0, 0, 2)
+                    },
+                    freqRows
+                }
+            }
+        };
+        rightStack.Children.Add(freqCard);
+
+        Grid.SetColumn(rightStack, 2);
+        centerGrid.Children.Add(rightStack);
+
+        // Bottom row
+        var best = days.Count > 0 ? days.MaxBy(d => d.NetProfit) : null;
+        var worst = days.Count > 0 ? days.MinBy(d => d.NetProfit) : null;
+        double avgDd = days.Count > 0 ? days.Average(d => d.MaxIntradayDrawdown) : 0.0;
+        double comms = result.Summary.ClosedTradeCommissions;
+        double gross = result.Summary.GrossProfit;
+        double commPct = gross > 0 ? (comms / gross) * 100.0 : 0.0;
+
+        var bottomGrid = new UniformGrid { Columns = 4 };
+        bottomGrid.Children.Add(MainWindow.MakeDynamicKpiCard("MEJOR DÍA", best != null ? $"{best.NetProfit:+$#,##0.00;-$#,##0.00;$0.00}" : "—", best != null ? $"Fecha: {best.DateUtc:yyyy-MM-dd} ({best.Trades} ops)" : "—", "#00E599", out _, out _));
+        bottomGrid.Children.Add(MainWindow.MakeDynamicKpiCard("PEOR DÍA", worst != null ? $"{worst.NetProfit:+$#,##0.00;-$#,##0.00;$0.00}" : "—", worst != null ? $"Fecha: {worst.DateUtc:yyyy-MM-dd} ({worst.Trades} ops)" : "—", "#FF355E", out _, out _));
+        bottomGrid.Children.Add(MainWindow.MakeDynamicKpiCard("DD INTRADÍA MEDIO", $"-${avgDd:#,##0.00}", "Riesgo medio por día", "#FF355E", out _, out _));
+        bottomGrid.Children.Add(MainWindow.MakeDynamicKpiCard("COMISIONES / BRUTO", $"${comms:#,##0.00} ({commPct:F1}%)", "Costes de ejecución sobre ganancia bruta", "#E4E4E7", out _, out _));
+
+        var mainStack = new StackPanel
+        {
+            Spacing = 6,
+            Margin = new Thickness(14),
+            Children =
+            {
+                headerBorder,
+                kpiGrid,
+                centerGrid,
+                bottomGrid
+            }
+        };
+
+        return new ScrollViewer
+        {
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            Content = mainStack
+        };
+    }
+}
+
+internal sealed class PropFirmAccountSimResult
+{
+    public int AccountNumber { get; set; }
+    public string FinalStatus { get; set; } = "";
+    public string PhaseReached { get; set; } = "";
+    public int DaysTraded { get; set; }
+    public int TotalTrades { get; set; }
+    public double AccountEquity { get; set; }
+    public double PayoutReceived { get; set; }
+    public bool PassedEvaluation { get; set; }
+    public bool AchievedPayout { get; set; }
+    public string Notes { get; set; } = "";
 }
 
 internal sealed class RolloverAccumulationSurface : Control

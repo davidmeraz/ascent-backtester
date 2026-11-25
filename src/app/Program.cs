@@ -56,7 +56,7 @@ internal static class Program
             }
             if (command == "prop-firms evaluate")
             {
-                input.Allow("input", "ticks", "adjusted", "from", "to", "plan", "strategy", "instrument", "fast", "slow", "quantity", "stop-ticks", "target-ticks", "breakeven-ticks", "breakeven-offset", "trailing-ticks", "commission", "slippage", "session-start", "session-end", "max-daily-loss", "max-daily-trades", "workspace");
+                input.Allow("input", "ticks", "adjusted", "from", "to", "plan", "strategy", "seed", "instrument", "fast", "slow", "quantity", "stop-ticks", "target-ticks", "breakeven-ticks", "breakeven-offset", "trailing-ticks", "commission", "slippage", "session-start", "session-end", "max-daily-loss", "max-daily-trades", "workspace");
                 string workspace = Workspace.Find(input.Optional("workspace"));
                 string sourcePath = ResolveSourcePath(input, workspace);
                 string? planId = input.Optional("plan");
@@ -90,6 +90,36 @@ internal static class Program
                     {
                         new
                         {
+                            id = "RandomEntry",
+                            description = "Entradas aleatorias con ratio 1:1 (~50% win rate baseline)",
+                            quantity = 1,
+                            stopLossTicks = 40,
+                            takeProfitTicks = 40,
+                            calculate = "OnBarClose",
+                            instruments = new[] { "ES", "NQ", "MES", "MNQ" }
+                        },
+                        new
+                        {
+                            id = "DubinsSavage",
+                            description = "Teoría de Probabilidad Óptima de Dubins-Savage (Bold Play: 1 trade/día en apertura NY con bloques asimétricos 98/102 ticks anti-comisión)",
+                            quantity = 2,
+                            stopLossTicks = 98,
+                            takeProfitTicks = 102,
+                            calculate = "OnBarClose",
+                            instruments = new[] { "ES", "NQ", "MES", "MNQ" }
+                        },
+                        new
+                        {
+                            id = "ReversionPlaybook",
+                            description = "El Arte de la Reversión (Curso Hub): Estocástico (20,5,5) en soporte/resistencia + Promediación en 2 balas + Señal de Escape mecánica",
+                            quantity = 1,
+                            stopLossTicks = 120,
+                            takeProfitTicks = 80,
+                            calculate = "OnBarClose",
+                            instruments = new[] { "NQ", "ES", "GC", "MNQ", "MES" }
+                        },
+                        new
+                        {
                             id = "SmaCrossover",
                             fastPeriod = 10,
                             slowPeriod = 20,
@@ -97,28 +127,15 @@ internal static class Program
                             calculate = "OnBarClose",
                             instruments = new[] { "ES", "NQ", "MES", "MNQ" },
                             platforms = new[] { "NinjaTrader", "TradingView" }
-                        },
-                        new
-                        {
-                            id = "VwapDeltaPullback",
-                            anchorTimeUtc = "13:30:00",
-                            atrPeriod = 14,
-                            slopeLookbackBars = 10,
-                            extendedDistancePoints = 6.0,
-                            quantity = 1,
-                            calculate = "OnBarClose",
-                            instruments = new[] { "ES", "NQ", "MES", "MNQ" },
-                            platforms = new[] { "NinjaTrader", "TradingView" }
                         }
                     }
                 }, json,
-                "SmaCrossover      · SMA rápida 10 / lenta 20 · ES/NQ/MES/MNQ · NinjaTrader & TradingView\n" +
-                "VwapDeltaPullback · VWAP Anclado (13:30 UTC) + ATR Wilder (14) + Order Flow Delta · ES/NQ/MES/MNQ");
+                "Estrategias disponibles:\n• RandomEntry (por defecto): Entradas aleatorias con ratio 1:1 (~50% win rate baseline)\n• DubinsSavage: Teoría de Probabilidad Óptima (Bold Play · 1 trade/día en apertura NY · bloques 100 ticks)\n• ReversionPlaybook: El Arte de la Reversión (Estocástico 20,5,5 + 2 Balas DCA + Señal de Escape)\n• SmaCrossover: Cruce de SMA rápida 10 / lenta 20");
                 return 0;
             }
             if (command == "backtest run")
             {
-                input.Allow("input", "ticks", "adjusted", "from", "to", "strategy", "instrument", "fast", "slow", "quantity", "stop-ticks", "target-ticks", "breakeven-ticks", "breakeven-offset", "trailing-ticks", "commission", "slippage", "session-start", "session-end", "max-daily-loss", "max-daily-trades", "output", "workspace");
+                input.Allow("input", "ticks", "adjusted", "from", "to", "strategy", "seed", "instrument", "fast", "slow", "quantity", "stop-ticks", "target-ticks", "breakeven-ticks", "breakeven-offset", "trailing-ticks", "commission", "slippage", "session-start", "session-end", "max-daily-loss", "max-daily-trades", "output", "workspace");
                 string workspace = Workspace.Find(input.Optional("workspace"));
                 string sourcePath = ResolveSourcePath(input, workspace);
                 var result = ExecuteBacktest(input, sourcePath, cancellation.Token);
@@ -188,16 +205,17 @@ internal static class Program
     {
         if (input.Optional("input") is string specified)
             return Path.GetFullPath(specified);
+        string instrument = (input.Optional("instrument") ?? "NQ").Trim().ToUpperInvariant();
         if (input.Has("ticks"))
         {
-            if (Workspace.FindDatabentoTbboFile(workspace) is string tbboPath)
+            if (Workspace.FindDatabentoTbboFile(workspace, instrument) is string tbboPath)
                 return tbboPath;
-            throw new ArgumentException("Falta --input y no se encontró data/databento/tbbo/NQ_ticks_UTC_L1.txt.");
+            throw new ArgumentException($"Falta --input y no se encontró la serie local de ticks TBBO para {instrument}. Consulta data/databento/README.md.");
         }
         bool adjusted = input.Has("adjusted");
-        if (Workspace.FindDatabentoMinuteFile(workspace, adjusted: adjusted) is string defaultPath)
+        if (Workspace.FindDatabentoMinuteFile(workspace, instrument, adjusted: adjusted) is string defaultPath)
             return defaultPath;
-        throw new ArgumentException("Falta --input y no se encontró data/databento/ohlcv-1m/NQ_1min_UTC_cierre.txt.");
+        throw new ArgumentException($"Falta --input y no se encontró la serie local ohlcv-1m para {instrument} en data/databento/{instrument}/ohlcv-1m/.");
     }
 
     private static DateTime? ParseDateBoundaryUtc(string? text, bool inclusiveEndOfDay)
@@ -219,7 +237,7 @@ internal static class Program
 
     private static BacktestResult ExecuteBacktest(Arguments input, string sourcePath, CancellationToken cancellationToken)
     {
-        string defaultInstrument = Path.GetFileName(sourcePath).StartsWith("NQ", StringComparison.OrdinalIgnoreCase) ? "NQ" : "ES";
+        string defaultInstrument = Workspace.InferInstrumentFromPath(sourcePath);
         string instrumentSymbol = (input.Optional("instrument") ?? defaultInstrument).ToUpperInvariant();
         InstrumentSpec spec = InstrumentSpec.FromSymbol(instrumentSymbol);
 
@@ -243,21 +261,19 @@ internal static class Program
         TimeOnly? sessionStart = input.Optional("session-start") is { } ss ? TimeOnly.ParseExact(ss, "HH:mm", CultureInfo.InvariantCulture) : null;
         TimeOnly? sessionEnd = input.Optional("session-end") is { } se ? TimeOnly.ParseExact(se, "HH:mm", CultureInfo.InvariantCulture) : null;
 
-        string strategyName = input.Optional("strategy") ?? "SmaCrossover";
+        string strategyName = input.Optional("strategy") ?? "RandomEntry";
+        int? seed = input.Optional("seed") is { } sd ? int.Parse(sd, CultureInfo.InvariantCulture) : (int?)null;
         IStrategy strategy = strategyName.Trim().ToUpperInvariant() switch
         {
+            "RANDOM" or "RANDOMENTRY" or "RANDOM-ENTRY" => new RandomEntryStrategy(new StrategyParameters(
+                fastPeriod, slowPeriod, quantity, stopLossTicks ?? 40, takeProfitTicks ?? 40, breakEvenTriggerTicks, breakEvenOffsetTicks, trailingStopTicks), seed),
+            "DUBINSSAVAGE" or "DUBINS-SAVAGE" or "BOLDPLAY" => new DubinsSavageStrategy(new StrategyParameters(
+                fastPeriod, slowPeriod, quantity, stopLossTicks ?? 98, takeProfitTicks ?? 102, breakEvenTriggerTicks, breakEvenOffsetTicks, trailingStopTicks), seed),
+            "REVERSION" or "REVERSIONPLAYBOOK" or "REVERSION-PLAYBOOK" or "STOCHASTIC" or "ELARTEDELAREVERSION" => new ReversionPlaybookStrategy(new StrategyParameters(
+                fastPeriod > 1 ? fastPeriod : 20, slowPeriod > 1 ? slowPeriod : 5, quantity, stopLossTicks, takeProfitTicks, breakEvenTriggerTicks, breakEvenOffsetTicks, trailingStopTicks)),
             "SMACROSSOVER" or "SMA" => new SmaCrossoverStrategy(new StrategyParameters(
                 fastPeriod, slowPeriod, quantity, stopLossTicks, takeProfitTicks, breakEvenTriggerTicks, breakEvenOffsetTicks, trailingStopTicks)),
-            "VWAPDELTAPULLBACK" or "VWAP" or "DELTAPULLBACK" => new VwapDeltaPullbackStrategy(new VwapDeltaPullbackParameters(
-                quantity: quantity,
-                anchorTimeUtc: sessionStart.HasValue ? sessionStart.Value.ToTimeSpan() : new TimeSpan(13, 30, 0),
-                stopLossTicks: stopLossTicks,
-                takeProfitTicks: takeProfitTicks,
-                breakEvenTriggerTicks: breakEvenTriggerTicks,
-                breakEvenOffsetTicks: breakEvenOffsetTicks,
-                trailingStopTicks: trailingStopTicks,
-                tickSize: spec.TickSize)),
-            _ => throw new ArgumentException($"Estrategia no reconocida: '{strategyName}'. Usa SmaCrossover o VwapDeltaPullback.")
+            _ => throw new ArgumentException($"Estrategia no reconocida: '{strategyName}'. Usa RandomEntry, DubinsSavage, ReversionPlaybook o SmaCrossover.")
         };
 
         return new BacktestRunner().Run(new BacktestRequest
@@ -292,17 +308,17 @@ internal static class Program
         Futures help [--json]
         Futures prop-firms list [--workspace <carpeta>] [--json]
         Futures prop-firms evaluate [--input <datos.txt>] [--ticks] [--adjusted] [--plan <id-plan>]
-            [--strategy SmaCrossover|VwapDeltaPullback]
+            [--strategy RandomEntry|DubinsSavage|ReversionPlaybook|SmaCrossover]
             [--from 2024-01-01] [--to 2026-10-30]
             [--instrument ES|NQ|MES|MNQ] [--fast 10] [--slow 20] [--quantity 1]
-            [--stop-ticks 20] [--target-ticks 40]
+            [--stop-ticks 40] [--target-ticks 40]
             [--breakeven-ticks 16] [--breakeven-offset 2] [--trailing-ticks 20]
             [--session-start 13:30] [--session-end 20:59]
             [--max-daily-loss 1000] [--max-daily-trades 5]
             [--commission 2.5] [--slippage 1] [--workspace <carpeta>] [--json]
         Futures strategies list [--json]
         Futures backtest run [--input <datos.txt>] [--ticks] [--adjusted]
-            [--strategy SmaCrossover|VwapDeltaPullback] [--instrument ES|NQ|MES|MNQ]
+            [--strategy RandomEntry|DubinsSavage|ReversionPlaybook|SmaCrossover] [--instrument ES|NQ|MES|MNQ]
             [--from 2024-01-01] [--to 2026-10-30]
             [--fast 10] [--slow 20] [--quantity 1]
             [--stop-ticks 20] [--target-ticks 40]

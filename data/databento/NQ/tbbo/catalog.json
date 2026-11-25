@@ -1,0 +1,1083 @@
+{
+  "format_version": 2,
+  "provider": "Databento",
+  "dataset": "GLBX.MDP3",
+  "instrument": "NQ",
+  "symbol": "NQ.v.0",
+  "stype_in": "continuous",
+  "schema": "tbbo",
+  "timezone": "UTC",
+  "timestamp_basis": "ts_event",
+  "timestamp_precision": "100ns",
+  "layout": "monthly_partitions",
+  "ticks_dir": "ticks",
+  "bars_1m_file": "NQ_1min_UTC_cierre.txt",
+  "bars_1m_sha256": "128b7237d70348fa8f261377583d4b5e0e2bab05727b945cfc2b268745330e91",
+  "bars_1m_size_bytes": 137776200,
+  "dates_cache_file": "dates_cache.json",
+  "start_inclusive_utc": "2010-06-06",
+  "end_exclusive_utc": "2019-05-14",
+  "first_tick_utc": "2010-06-07T00:00:00.848+00:00",
+  "last_tick_utc": "2019-05-13T23:59:59.9558203+00:00",
+  "tick_count": 349071522,
+  "bar_count_1m": 2922762,
+  "month_count": 108,
+  "total_ticks_size_bytes": 16397866447,
+  "combined_ticks_sha256": "53564bc58f6346a9d9f2712f51157f8323c20f93d467d2abfc494a0710590145",
+  "degraded_dates_provider": [
+    "2018-10-21",
+    "2019-01-15",
+    "2019-02-22",
+    "2019-03-13",
+    "2019-03-26"
+  ],
+  "raw_batches": [
+    {
+      "start_inclusive_utc": "2010-06-06",
+      "end_exclusive_utc": "2011-09-14",
+      "raw_file": "raw/20100606-20110914.tbbo.csv.zst",
+      "raw_sha256": "25bcfdde89cc799106de4c3b8d45ada334be8a5b4d1f475c44b0bcbf6ee9f8b7",
+      "raw_size_bytes": 657106904,
+      "billable_size_bytes": 4013911600,
+      "quoted_cost_usd": 104.670901596546,
+      "tick_count": 50173895,
+      "derived_bar_count": 398870
+    },
+    {
+      "start_inclusive_utc": "2011-09-14",
+      "end_exclusive_utc": "2013-06-12",
+      "raw_file": "raw/20110914-20130612.tbbo.csv.zst",
+      "raw_sha256": "ceb08ab995eedfafec3b74c80e01f20fe44f35693a7ab2ab150d7d04989b40a0",
+      "raw_size_bytes": 762847742,
+      "billable_size_bytes": 4786180000,
+      "quoted_cost_usd": 124.809369444847,
+      "tick_count": 59827243,
+      "derived_bar_count": 554755
+    },
+    {
+      "start_inclusive_utc": "2013-06-12",
+      "end_exclusive_utc": "2015-01-13",
+      "raw_file": "raw/20130612-20150113.tbbo.csv.zst",
+      "raw_sha256": "13c295c42c9190121b43d4dc1f20d2d022106dfa8ff4bc5375e3c71b759cf942",
+      "raw_size_bytes": 808058512,
+      "billable_size_bytes": 4793126880,
+      "quoted_cost_usd": 124.990523457527,
+      "tick_count": 59914085,
+      "derived_bar_count": 495299
+    },
+    {
+      "start_inclusive_utc": "2015-01-13",
+      "end_exclusive_utc": "2016-09-22",
+      "raw_file": "raw/20150113-20160922.tbbo.csv.zst",
+      "raw_sha256": "8ad54fdca55a5e698a7cc1d0275adb0a0d82791370ac5c35d5e209e74c159ee6",
+      "raw_size_bytes": 1169336871,
+      "billable_size_bytes": 4790454160,
+      "quoted_cost_usd": 124.920826852322,
+      "tick_count": 59880672,
+      "derived_bar_count": 565088
+    },
+    {
+      "start_inclusive_utc": "2016-09-22",
+      "end_exclusive_utc": "2018-06-27",
+      "raw_file": "raw/20160922-20180627.tbbo.csv.zst",
+      "raw_sha256": "4d9e8e220f3f334855e4f3671e40cd8ba6f799295c21bfcba86a9d7315c6f6f5",
+      "raw_size_bytes": 2147731415,
+      "billable_size_bytes": 4786388160,
+      "quoted_cost_usd": 124.814797639847,
+      "tick_count": 59829267,
+      "derived_bar_count": 602854
+    },
+    {
+      "start_inclusive_utc": "2018-06-27",
+      "end_exclusive_utc": "2019-05-14",
+      "raw_file": "raw/20180627-20190513.tbbo.csv.zst",
+      "raw_sha256": "423c0ae4803ffd3df1a0cd53f3057aa9773bc3716bc4b44245429fb1dc0dcb4c",
+      "raw_size_bytes": 1752450292,
+      "billable_size_bytes": 4755748160,
+      "quoted_cost_usd": 124.015797376633,
+      "actual_cost_usd": 124.01579737663269,
+      "provider_job_id": "GLBX-20261116-48X6RM73BD",
+      "provider_record_count": 59446852,
+      "provider_metadata_dir": "raw/provider/20180627-20190513",
+      "provider_condition_file": "raw/provider/20180627-20190513/condition.json",
+      "tick_count": 59446360,
+      "derived_bar_count": 305896,
+      "skipped_crossed_or_empty_book": 492,
+      "skipped_out_of_order": 0
+    }
+  ],
+  "months": [
+    {
+      "month": "2010-06",
+      "file": "ticks/2010/2010-06.txt",
+      "tick_count": 3178524,
+      "size_bytes": 149359220,
+      "first_tick_utc": "2010-06-07T00:00:00.848+00:00",
+      "last_tick_utc": "2010-06-30T23:59:56.828+00:00",
+      "sha256": "284057f33eedcc048e1dabcfe9e61135521a8d75896d7d004e582b78dfe8699d"
+    },
+    {
+      "month": "2010-07",
+      "file": "ticks/2010/2010-07.txt",
+      "tick_count": 3931660,
+      "size_bytes": 184767929,
+      "first_tick_utc": "2010-07-01T00:00:25.144+00:00",
+      "last_tick_utc": "2010-07-30T20:14:59.998+00:00",
+      "sha256": "e90accac4e102d26a24af2dfdc83f65aca97f7e8228a6a71f68b977acdcb1b61"
+    },
+    {
+      "month": "2010-08",
+      "file": "ticks/2010/2010-08.txt",
+      "tick_count": 3875258,
+      "size_bytes": 182156739,
+      "first_tick_utc": "2010-08-01T22:00:00.074+00:00",
+      "last_tick_utc": "2010-08-31T23:59:12.601+00:00",
+      "sha256": "18f3ae499e1e846293af86cd3b1d5fc7314078855b5d716382fa062f59f05977"
+    },
+    {
+      "month": "2010-09",
+      "file": "ticks/2010/2010-09.txt",
+      "tick_count": 3503801,
+      "size_bytes": 164664216,
+      "first_tick_utc": "2010-09-01T00:00:35.36+00:00",
+      "last_tick_utc": "2010-09-30T23:59:59.997+00:00",
+      "sha256": "7b4aaf9f6fa0bfcf7b29db4dbf3e23b81a1e76623b62700b57603b1b7dc95e10"
+    },
+    {
+      "month": "2010-10",
+      "file": "ticks/2010/2010-10.txt",
+      "tick_count": 3589387,
+      "size_bytes": 168687464,
+      "first_tick_utc": "2010-10-01T00:00:00.037+00:00",
+      "last_tick_utc": "2010-10-31T23:57:45.131+00:00",
+      "sha256": "0e6aeb53e9dd13f68612b318767b0789e94161518d4360166bde21a7386c248a"
+    },
+    {
+      "month": "2010-11",
+      "file": "ticks/2010/2010-11.txt",
+      "tick_count": 3577963,
+      "size_bytes": 168190918,
+      "first_tick_utc": "2010-11-01T00:00:15.625+00:00",
+      "last_tick_utc": "2010-11-30T23:59:57.817+00:00",
+      "sha256": "1122f57918311f7f67bf12244ab7d5c32fe2488b4b741503642fbdeb441d39bc"
+    },
+    {
+      "month": "2010-12",
+      "file": "ticks/2010/2010-12.txt",
+      "tick_count": 1922835,
+      "size_bytes": 90414755,
+      "first_tick_utc": "2010-12-01T00:00:03.534+00:00",
+      "last_tick_utc": "2010-12-31T21:14:59.825+00:00",
+      "sha256": "12665a6099594052eafe63adddb40299bb7d198fa0375d0d2670821b5f9c878e"
+    },
+    {
+      "month": "2011-01",
+      "file": "ticks/2011/2011-01.txt",
+      "tick_count": 2692480,
+      "size_bytes": 126575196,
+      "first_tick_utc": "2011-01-02T23:00:00.088+00:00",
+      "last_tick_utc": "2011-01-31T23:58:56.525+00:00",
+      "sha256": "37acf5ad9cb94272dcc3fe1574b4d9076d6448fe3ea11a7fecb52ec5b2e29311"
+    },
+    {
+      "month": "2011-02",
+      "file": "ticks/2011/2011-02.txt",
+      "tick_count": 2445895,
+      "size_bytes": 114968758,
+      "first_tick_utc": "2011-02-01T00:00:13.459+00:00",
+      "last_tick_utc": "2011-02-28T23:58:27.518+00:00",
+      "sha256": "0310e41f761ee5cdfc898f870a1ca0afd68854e451ab0887f5561657609487d8"
+    },
+    {
+      "month": "2011-03",
+      "file": "ticks/2011/2011-03.txt",
+      "tick_count": 3742716,
+      "size_bytes": 175902977,
+      "first_tick_utc": "2011-03-01T00:00:11.679+00:00",
+      "last_tick_utc": "2011-03-31T23:59:55.917+00:00",
+      "sha256": "3ad79387be89a4cbb9a2df9a7fc05661e72c029c58f7a14279a8f4e8e7adfb69"
+    },
+    {
+      "month": "2011-04",
+      "file": "ticks/2011/2011-04.txt",
+      "tick_count": 2596122,
+      "size_bytes": 122044990,
+      "first_tick_utc": "2011-04-01T00:00:06.263+00:00",
+      "last_tick_utc": "2011-04-29T20:14:58.219+00:00",
+      "sha256": "6e6d7dbe41bc6547eba4380c160e2bf452e689683776ea8aee61ab541f2282fe"
+    },
+    {
+      "month": "2011-05",
+      "file": "ticks/2011/2011-05.txt",
+      "tick_count": 2974703,
+      "size_bytes": 139816992,
+      "first_tick_utc": "2011-05-01T22:00:00.034+00:00",
+      "last_tick_utc": "2011-05-31T23:59:57.262+00:00",
+      "sha256": "602b2d815b6e252d534673b8c425b94eb4069e6295114e5e0c4bfe8205dee585"
+    },
+    {
+      "month": "2011-06",
+      "file": "ticks/2011/2011-06.txt",
+      "tick_count": 3041142,
+      "size_bytes": 142929478,
+      "first_tick_utc": "2011-06-01T00:00:58.987+00:00",
+      "last_tick_utc": "2011-06-30T23:59:58.016+00:00",
+      "sha256": "63d78d1a5cbea055dddc7ee1c6fa4c3e692f0666973fa4bf3f68a83bb543a8f5"
+    },
+    {
+      "month": "2011-07",
+      "file": "ticks/2011/2011-07.txt",
+      "tick_count": 2769168,
+      "size_bytes": 130107993,
+      "first_tick_utc": "2011-07-01T00:00:00.446+00:00",
+      "last_tick_utc": "2011-07-31T23:59:24.103+00:00",
+      "sha256": "c7d4ee46d1ebddb19a8e8ec12495def76eaf9ebfa8882a9c9b88f1c55fc45ce1"
+    },
+    {
+      "month": "2011-08",
+      "file": "ticks/2011/2011-08.txt",
+      "tick_count": 5129788,
+      "size_bytes": 240968813,
+      "first_tick_utc": "2011-08-01T00:00:00.835+00:00",
+      "last_tick_utc": "2011-08-31T23:59:58.582+00:00",
+      "sha256": "80fceb30df151c9e9f945d2e5e2d21b3d3210bf2b4b3f981f4f0676027b2525b"
+    },
+    {
+      "month": "2011-09",
+      "file": "ticks/2011/2011-09.txt",
+      "tick_count": 3930988,
+      "size_bytes": 184596262,
+      "first_tick_utc": "2011-09-01T00:00:01.721+00:00",
+      "last_tick_utc": "2011-09-30T20:14:59.916+00:00",
+      "sha256": "779176dd0ace2e8723e8d5a720b140e2affa1b7d112598d574f414ec38cd8a7a"
+    },
+    {
+      "month": "2011-10",
+      "file": "ticks/2011/2011-10.txt",
+      "tick_count": 3847193,
+      "size_bytes": 180665546,
+      "first_tick_utc": "2011-10-02T22:00:00.037+00:00",
+      "last_tick_utc": "2011-10-31T23:59:53.13+00:00",
+      "sha256": "98600bc48219d552d583aa9e650a92df2b69d8affe2220abbd6617e11cbd0b69"
+    },
+    {
+      "month": "2011-11",
+      "file": "ticks/2011/2011-11.txt",
+      "tick_count": 3452711,
+      "size_bytes": 162167146,
+      "first_tick_utc": "2011-11-01T00:00:03.21+00:00",
+      "last_tick_utc": "2011-11-30T23:59:53.025+00:00",
+      "sha256": "e519601e3f27ad2a6f456370ce5e807027b3721ee11392e4dd2b18ac0a5b9e27"
+    },
+    {
+      "month": "2011-12",
+      "file": "ticks/2011/2011-12.txt",
+      "tick_count": 2299769,
+      "size_bytes": 108004198,
+      "first_tick_utc": "2011-12-01T00:00:03.434+00:00",
+      "last_tick_utc": "2011-12-30T21:14:55.114+00:00",
+      "sha256": "fc4e54053e087b611edd696c5295b767a2c67bc3a56b3c2ba9e10535df34bcd7"
+    },
+    {
+      "month": "2012-01",
+      "file": "ticks/2012/2012-01.txt",
+      "tick_count": 2242289,
+      "size_bytes": 105336810,
+      "first_tick_utc": "2012-01-03T11:00:00.052+00:00",
+      "last_tick_utc": "2012-01-31T23:59:56.479+00:00",
+      "sha256": "3bd75f4ee1bcb3431f0a3787c4d9b2f6497636071c96d563f597c2f688a4147f"
+    },
+    {
+      "month": "2012-02",
+      "file": "ticks/2012/2012-02.txt",
+      "tick_count": 2496149,
+      "size_bytes": 117266229,
+      "first_tick_utc": "2012-02-01T00:00:43.919+00:00",
+      "last_tick_utc": "2012-02-29T23:59:49.878+00:00",
+      "sha256": "d66c21851463b62a203eb47523268e2c761d9f97e15923f0c70bf5a5d1ecdd71"
+    },
+    {
+      "month": "2012-03",
+      "file": "ticks/2012/2012-03.txt",
+      "tick_count": 2655232,
+      "size_bytes": 124731884,
+      "first_tick_utc": "2012-03-01T00:00:11.603+00:00",
+      "last_tick_utc": "2012-03-30T20:14:59.386+00:00",
+      "sha256": "4dc3e13286dfe6b78724fde9be79e563a4b3cf2db2976b32f1d7f1fcb08209de"
+    },
+    {
+      "month": "2012-04",
+      "file": "ticks/2012/2012-04.txt",
+      "tick_count": 3034707,
+      "size_bytes": 142569535,
+      "first_tick_utc": "2012-04-01T22:00:00.037+00:00",
+      "last_tick_utc": "2012-04-30T23:59:49.822+00:00",
+      "sha256": "29dfbab0ff6d6a2563353491d94cf052eb68571141936b9e286f9a7eca422aca"
+    },
+    {
+      "month": "2012-05",
+      "file": "ticks/2012/2012-05.txt",
+      "tick_count": 3667533,
+      "size_bytes": 172254475,
+      "first_tick_utc": "2012-05-01T00:00:00.034+00:00",
+      "last_tick_utc": "2012-05-31T23:59:56.222+00:00",
+      "sha256": "0858e9bf31d1d675f4c86aac3ca7d52c6e5b9edb04b4a3e5dcc3978c3f020eac"
+    },
+    {
+      "month": "2012-06",
+      "file": "ticks/2012/2012-06.txt",
+      "tick_count": 3068142,
+      "size_bytes": 144138343,
+      "first_tick_utc": "2012-06-01T00:00:21.898+00:00",
+      "last_tick_utc": "2012-06-29T20:14:59.209+00:00",
+      "sha256": "e230a4943ee7cbdfadd5dfb755cb232f52066d2df9bb8a505c16bfc10f618007"
+    },
+    {
+      "month": "2012-07",
+      "file": "ticks/2012/2012-07.txt",
+      "tick_count": 2854923,
+      "size_bytes": 134110038,
+      "first_tick_utc": "2012-07-01T22:00:00.039+00:00",
+      "last_tick_utc": "2012-07-31T23:59:50.751+00:00",
+      "sha256": "c70e4a4a15dc948f9c4f6e0ecca0cb053490fba133da516add36c4704bfad10a"
+    },
+    {
+      "month": "2012-08",
+      "file": "ticks/2012/2012-08.txt",
+      "tick_count": 2621155,
+      "size_bytes": 123157345,
+      "first_tick_utc": "2012-08-01T00:00:00.684+00:00",
+      "last_tick_utc": "2012-08-31T20:14:58.585+00:00",
+      "sha256": "8c1ab1af9370fc732379cb0b409d414d6316390520e654ee82c1feaf0bb15727"
+    },
+    {
+      "month": "2012-09",
+      "file": "ticks/2012/2012-09.txt",
+      "tick_count": 2233853,
+      "size_bytes": 104952768,
+      "first_tick_utc": "2012-09-02T22:00:00.034+00:00",
+      "last_tick_utc": "2012-09-30T23:59:26.733+00:00",
+      "sha256": "c1fa913e1a4460942893d425c2fd0f1d43cbe144a7a65a357e1fb69e621b99a5"
+    },
+    {
+      "month": "2012-10",
+      "file": "ticks/2012/2012-10.txt",
+      "tick_count": 3226976,
+      "size_bytes": 151570817,
+      "first_tick_utc": "2012-10-01T00:00:14.754+00:00",
+      "last_tick_utc": "2012-10-31T23:59:29.56+00:00",
+      "sha256": "69be8b8c784b6dcc7d3d9cdd446ffc74fbc57e881c5b89e3c633047345943f95"
+    },
+    {
+      "month": "2012-11",
+      "file": "ticks/2012/2012-11.txt",
+      "tick_count": 3336121,
+      "size_bytes": 156700084,
+      "first_tick_utc": "2012-11-01T00:00:08.366+00:00",
+      "last_tick_utc": "2012-11-30T22:14:59.739+00:00",
+      "sha256": "3992d482298c1de4b9680f3fd6efb9615ba031666f769fa4275b95843747341f"
+    },
+    {
+      "month": "2012-12",
+      "file": "ticks/2012/2012-12.txt",
+      "tick_count": 2587112,
+      "size_bytes": 121522516,
+      "first_tick_utc": "2012-12-02T23:00:00.024+00:00",
+      "last_tick_utc": "2012-12-31T22:14:59.613+00:00",
+      "sha256": "d211d0adcb3de6750743159f87656882a8ada5b8e85f9da07fc8918ce9dcf742"
+    },
+    {
+      "month": "2013-01",
+      "file": "ticks/2013/2013-01.txt",
+      "tick_count": 2529848,
+      "size_bytes": 118869495,
+      "first_tick_utc": "2013-01-02T11:00:00.01+00:00",
+      "last_tick_utc": "2013-01-31T23:58:48.47+00:00",
+      "sha256": "a1edd727972d1953baaf54fd736297b3680fda5060be5360ecbf56dae6167141"
+    },
+    {
+      "month": "2013-02",
+      "file": "ticks/2013/2013-02.txt",
+      "tick_count": 2285401,
+      "size_bytes": 107383029,
+      "first_tick_utc": "2013-02-01T00:00:00.808+00:00",
+      "last_tick_utc": "2013-02-28T23:59:33.347+00:00",
+      "sha256": "d2f31b3064e210e3b1e2809cd57bd5ea9e292c5b430c8deebb970f9f8e168b34"
+    },
+    {
+      "month": "2013-03",
+      "file": "ticks/2013/2013-03.txt",
+      "tick_count": 2007336,
+      "size_bytes": 94309258,
+      "first_tick_utc": "2013-03-01T00:00:21.655+00:00",
+      "last_tick_utc": "2013-03-31T23:59:50.973+00:00",
+      "sha256": "15d66741c527996b04aef7feb4fc5398df7f4f3aa575d8938cdd19fffbc7c1f8"
+    },
+    {
+      "month": "2013-04",
+      "file": "ticks/2013/2013-04.txt",
+      "tick_count": 2841668,
+      "size_bytes": 133500986,
+      "first_tick_utc": "2013-04-01T00:00:30.983+00:00",
+      "last_tick_utc": "2013-04-30T23:59:37.404+00:00",
+      "sha256": "d0aabc868cc7b67eb75ddb9d1157a53144cd7e1c96cc262b8d5dd0aa9f16a310"
+    },
+    {
+      "month": "2013-05",
+      "file": "ticks/2013/2013-05.txt",
+      "tick_count": 2623047,
+      "size_bytes": 123283859,
+      "first_tick_utc": "2013-05-01T00:00:01.135+00:00",
+      "last_tick_utc": "2013-05-31T21:14:59.609+00:00",
+      "sha256": "066145cdf3e470e2171a2820274e371659867d629fe38510e4cb285dfa96f057"
+    },
+    {
+      "month": "2013-06",
+      "file": "ticks/2013/2013-06.txt",
+      "tick_count": 3198458,
+      "size_bytes": 150330648,
+      "first_tick_utc": "2013-06-02T22:00:00.047+00:00",
+      "last_tick_utc": "2013-06-30T23:59:45.148+00:00",
+      "sha256": "d9f20fe839352f47bd050479ec015d1a0bc3817ccc35454d6f2be06239f7f69c"
+    },
+    {
+      "month": "2013-07",
+      "file": "ticks/2013/2013-07.txt",
+      "tick_count": 2541242,
+      "size_bytes": 119431654,
+      "first_tick_utc": "2013-07-01T00:00:02.138+00:00",
+      "last_tick_utc": "2013-07-31T23:59:58.648+00:00",
+      "sha256": "1d8981b09e831f5abf50df9a132e1f48c99b57b03098eb6be216dae07a7033ee"
+    },
+    {
+      "month": "2013-08",
+      "file": "ticks/2013/2013-08.txt",
+      "tick_count": 2690206,
+      "size_bytes": 126448138,
+      "first_tick_utc": "2013-08-01T00:00:04.358+00:00",
+      "last_tick_utc": "2013-08-30T21:14:59.731+00:00",
+      "sha256": "ace39d28fe7cd4fed0d99f8c3655faf1ba6484c533a9ab967685552629097a19"
+    },
+    {
+      "month": "2013-09",
+      "file": "ticks/2013/2013-09.txt",
+      "tick_count": 2299937,
+      "size_bytes": 108098287,
+      "first_tick_utc": "2013-09-02T22:00:00.009+00:00",
+      "last_tick_utc": "2013-09-30T23:59:29.223+00:00",
+      "sha256": "42ca14a331c6b7c66f4661d288bca84bc1fc776d7b1799a8123697797142b88b"
+    },
+    {
+      "month": "2013-10",
+      "file": "ticks/2013/2013-10.txt",
+      "tick_count": 3390312,
+      "size_bytes": 159225507,
+      "first_tick_utc": "2013-10-01T00:00:00.201+00:00",
+      "last_tick_utc": "2013-10-31T23:59:28.501+00:00",
+      "sha256": "48f5673d8deab7068737a0a34f0d538dcb39f61eca6b21fc371c006f7d494dd6"
+    },
+    {
+      "month": "2013-11",
+      "file": "ticks/2013/2013-11.txt",
+      "tick_count": 2403313,
+      "size_bytes": 112908974,
+      "first_tick_utc": "2013-11-01T00:00:01.025+00:00",
+      "last_tick_utc": "2013-11-29T18:14:59.728+00:00",
+      "sha256": "d751099797ee0e174cf8fdbec3b8b03227743e49162b3df7404e815f5752dcfd"
+    },
+    {
+      "month": "2013-12",
+      "file": "ticks/2013/2013-12.txt",
+      "tick_count": 2231113,
+      "size_bytes": 104836753,
+      "first_tick_utc": "2013-12-01T23:00:00.038+00:00",
+      "last_tick_utc": "2013-12-31T22:14:55.315+00:00",
+      "sha256": "1cff150d56c4f73c17232660a92499e2b05e4c6552cf24339bd01c34b70a4747"
+    },
+    {
+      "month": "2014-01",
+      "file": "ticks/2014/2014-01.txt",
+      "tick_count": 3363944,
+      "size_bytes": 158023614,
+      "first_tick_utc": "2014-01-02T11:00:00.004+00:00",
+      "last_tick_utc": "2014-01-31T22:14:59.077+00:00",
+      "sha256": "0c6e523d6b37f431a1abf82a82d76c6861ba7991a067419d3b49b95f8f1c8470"
+    },
+    {
+      "month": "2014-02",
+      "file": "ticks/2014/2014-02.txt",
+      "tick_count": 3146661,
+      "size_bytes": 147818660,
+      "first_tick_utc": "2014-02-02T23:00:00.04+00:00",
+      "last_tick_utc": "2014-02-28T22:14:59.161+00:00",
+      "sha256": "8a5c347701f9ae5690c349d1a1536508917a628351ca34ff71521433bdb0d42c"
+    },
+    {
+      "month": "2014-03",
+      "file": "ticks/2014/2014-03.txt",
+      "tick_count": 3816363,
+      "size_bytes": 179285710,
+      "first_tick_utc": "2014-03-02T23:00:00.056+00:00",
+      "last_tick_utc": "2014-03-31T23:59:52.734+00:00",
+      "sha256": "fc14289aacea251c601cc681e979ed75ebbea2d2ae1c88c6e8fefb813eff7c26"
+    },
+    {
+      "month": "2014-04",
+      "file": "ticks/2014/2014-04.txt",
+      "tick_count": 4644710,
+      "size_bytes": 218086596,
+      "first_tick_utc": "2014-04-01T00:00:00.066+00:00",
+      "last_tick_utc": "2014-04-30T23:59:52.165+00:00",
+      "sha256": "531a57329a59ac0caf9ae2bde734e75ad0a0206d5d25db75d7da6a4c88fdc922"
+    },
+    {
+      "month": "2014-05",
+      "file": "ticks/2014/2014-05.txt",
+      "tick_count": 3303595,
+      "size_bytes": 155122562,
+      "first_tick_utc": "2014-05-01T00:00:00.115+00:00",
+      "last_tick_utc": "2014-05-30T21:14:59.094+00:00",
+      "sha256": "7287cdf1eddf3eebdd742310142b7e09a974a67bba74258ff065450dbac82e28"
+    },
+    {
+      "month": "2014-06",
+      "file": "ticks/2014/2014-06.txt",
+      "tick_count": 2192517,
+      "size_bytes": 102981682,
+      "first_tick_utc": "2014-06-01T22:00:00.053+00:00",
+      "last_tick_utc": "2014-06-30T23:59:59.6+00:00",
+      "sha256": "3ae99d4ed8d3d879ea762c16794411e4c44ab545c7648af5b64035943a99be96"
+    },
+    {
+      "month": "2014-07",
+      "file": "ticks/2014/2014-07.txt",
+      "tick_count": 3036914,
+      "size_bytes": 142620394,
+      "first_tick_utc": "2014-07-01T00:00:00.019+00:00",
+      "last_tick_utc": "2014-07-31T23:59:52.101+00:00",
+      "sha256": "88573d345e7abd97d628ec051a6e91d58f9bafaa52e875d31c58e9172659d5fa"
+    },
+    {
+      "month": "2014-08",
+      "file": "ticks/2014/2014-08.txt",
+      "tick_count": 2856075,
+      "size_bytes": 134144721,
+      "first_tick_utc": "2014-08-01T00:00:01.1+00:00",
+      "last_tick_utc": "2014-08-31T23:58:22.429+00:00",
+      "sha256": "f094433460297d0f6355a6237df2da1f8bf2d1170cb47c8858e491017c5197e8"
+    },
+    {
+      "month": "2014-09",
+      "file": "ticks/2014/2014-09.txt",
+      "tick_count": 2703584,
+      "size_bytes": 126990150,
+      "first_tick_utc": "2014-09-01T00:00:43.639+00:00",
+      "last_tick_utc": "2014-09-30T23:58:59.925+00:00",
+      "sha256": "f0b1d00023a9d84fa1029baa2eea383192b964b2faf6eea95a4fc78d72b8ba72"
+    },
+    {
+      "month": "2014-10",
+      "file": "ticks/2014/2014-10.txt",
+      "tick_count": 6043074,
+      "size_bytes": 283772616,
+      "first_tick_utc": "2014-10-01T00:00:01.668+00:00",
+      "last_tick_utc": "2014-10-31T21:14:59.17+00:00",
+      "sha256": "7d03ed7a529a92efb6e2dbe4638a1ee30876b454530b1e4cb8604ee6f08f33b4"
+    },
+    {
+      "month": "2014-11",
+      "file": "ticks/2014/2014-11.txt",
+      "tick_count": 2429346,
+      "size_bytes": 114084760,
+      "first_tick_utc": "2014-11-02T23:00:00.063+00:00",
+      "last_tick_utc": "2014-11-30T23:59:59.967+00:00",
+      "sha256": "5a9653d1c810d7f343df71f44ce8393f2975fca15484b2fd806f40e547cb9248"
+    },
+    {
+      "month": "2014-12",
+      "file": "ticks/2014/2014-12.txt",
+      "tick_count": 3370472,
+      "size_bytes": 158291376,
+      "first_tick_utc": "2014-12-01T00:00:00.285+00:00",
+      "last_tick_utc": "2014-12-30T22:14:58.83+00:00",
+      "sha256": "dfe1b1168dc72680b2bad8fb5765df42bd22bd79c70758c2fa1c8d871d5b3be4"
+    },
+    {
+      "month": "2015-01",
+      "file": "ticks/2015/2015-01.txt",
+      "tick_count": 4471821,
+      "size_bytes": 209990342,
+      "first_tick_utc": "2015-01-01T23:00:00.005+00:00",
+      "last_tick_utc": "2015-01-30T22:14:47.272+00:00",
+      "sha256": "3ac84b9858f992bfaec690090e5e21216e544358833a6027feb75c1481bbaca9"
+    },
+    {
+      "month": "2015-02",
+      "file": "ticks/2015/2015-02.txt",
+      "tick_count": 2613242,
+      "size_bytes": 122746231,
+      "first_tick_utc": "2015-02-01T23:00:00.051+00:00",
+      "last_tick_utc": "2015-02-27T22:14:59.004+00:00",
+      "sha256": "af1271b1b61ceed582395d94d0a78cd439da58197fc8881dc880a1bd783aa7dd"
+    },
+    {
+      "month": "2015-03",
+      "file": "ticks/2015/2015-03.txt",
+      "tick_count": 3179596,
+      "size_bytes": 149331506,
+      "first_tick_utc": "2015-03-01T23:00:00.056+00:00",
+      "last_tick_utc": "2015-03-31T23:59:43.837+00:00",
+      "sha256": "4dc466b85c7edd8246c7f204bcf93908cd263c1cc15f26f8061f86d867bae088"
+    },
+    {
+      "month": "2015-04",
+      "file": "ticks/2015/2015-04.txt",
+      "tick_count": 2966370,
+      "size_bytes": 139306835,
+      "first_tick_utc": "2015-04-01T00:00:03.186+00:00",
+      "last_tick_utc": "2015-04-30T23:59:57.664+00:00",
+      "sha256": "8430432b41fe3339552e17c2eb2cb35894d95976374b0d2db42ca7ad181fb4b5"
+    },
+    {
+      "month": "2015-05",
+      "file": "ticks/2015/2015-05.txt",
+      "tick_count": 2490706,
+      "size_bytes": 116943246,
+      "first_tick_utc": "2015-05-01T00:00:00.442+00:00",
+      "last_tick_utc": "2015-05-31T23:59:52.825+00:00",
+      "sha256": "96b4067006071e8ee971a068a9761aa77e1c96feb5de8d9de41f2e35f92c3023"
+    },
+    {
+      "month": "2015-06",
+      "file": "ticks/2015/2015-06.txt",
+      "tick_count": 2831094,
+      "size_bytes": 132944977,
+      "first_tick_utc": "2015-06-01T00:00:10.709+00:00",
+      "last_tick_utc": "2015-06-30T21:14:58.62+00:00",
+      "sha256": "e78dd6866035212c67c392d5721397cf645d9d7daf62de19d6c67e50fee0f292"
+    },
+    {
+      "month": "2015-07",
+      "file": "ticks/2015/2015-07.txt",
+      "tick_count": 3304700,
+      "size_bytes": 155147204,
+      "first_tick_utc": "2015-07-01T00:45:00.006+00:00",
+      "last_tick_utc": "2015-07-31T21:14:59.101+00:00",
+      "sha256": "4234f2e59292137a584bc05b308dd557f736fe1f00f950dfd366343025655c72"
+    },
+    {
+      "month": "2015-08",
+      "file": "ticks/2015/2015-08.txt",
+      "tick_count": 5182525,
+      "size_bytes": 243307886,
+      "first_tick_utc": "2015-08-02T22:00:00.054+00:00",
+      "last_tick_utc": "2015-08-31T23:59:53.756+00:00",
+      "sha256": "8281bbf908980420e0659605bd0e9fc6dacca7530a137121fab70f1ee8a68d32"
+    },
+    {
+      "month": "2015-09",
+      "file": "ticks/2015/2015-09.txt",
+      "tick_count": 4704771,
+      "size_bytes": 220871833,
+      "first_tick_utc": "2015-09-01T00:00:01.282+00:00",
+      "last_tick_utc": "2015-09-30T23:59:57.019+00:00",
+      "sha256": "a7b97bb48ef2f173c892126b8e11b8a047ef3fcb0329e43215e7ecc65f501bdd"
+    },
+    {
+      "month": "2015-10",
+      "file": "ticks/2015/2015-10.txt",
+      "tick_count": 4129275,
+      "size_bytes": 193850583,
+      "first_tick_utc": "2015-10-01T00:00:03.507+00:00",
+      "last_tick_utc": "2015-10-30T20:59:58.921+00:00",
+      "sha256": "3ceb5138827fa5f93b69b1ab53740d0172d83fd380de40df00c3db18325292d4"
+    },
+    {
+      "month": "2015-11",
+      "file": "ticks/2015/2015-11.txt",
+      "tick_count": 2866898,
+      "size_bytes": 134636168,
+      "first_tick_utc": "2015-11-01T23:00:00.053+00:00",
+      "last_tick_utc": "2015-11-30T23:57:11.823879+00:00",
+      "sha256": "7700c45331bfe2a612093cd508d4b8a4dc7ec8eefdca6973afa132d0886f3225"
+    },
+    {
+      "month": "2015-12",
+      "file": "ticks/2015/2015-12.txt",
+      "tick_count": 2173725,
+      "size_bytes": 102140481,
+      "first_tick_utc": "2015-12-01T00:00:00.2742328+00:00",
+      "last_tick_utc": "2015-12-31T21:59:58.5897612+00:00",
+      "sha256": "d3ed67a73e3d947db27ed6b965df7f9302f1366b794a7d14e6111ae9a8284b60"
+    },
+    {
+      "month": "2016-01",
+      "file": "ticks/2016/2016-01.txt",
+      "tick_count": 3779456,
+      "size_bytes": 177550687,
+      "first_tick_utc": "2016-01-03T23:00:00.0537758+00:00",
+      "last_tick_utc": "2016-01-31T23:59:40.575046+00:00",
+      "sha256": "d89332cfc423784bfc3c70537aa58c811759f3bb1fa025a4a9d1bff31d71dedd"
+    },
+    {
+      "month": "2016-02",
+      "file": "ticks/2016/2016-02.txt",
+      "tick_count": 3260831,
+      "size_bytes": 153235552,
+      "first_tick_utc": "2016-02-01T00:00:01.2120163+00:00",
+      "last_tick_utc": "2016-02-29T23:59:29.7546392+00:00",
+      "sha256": "969abd79c056825507acd8318552563503632d22c9d05d89cac27c514facdc3d"
+    },
+    {
+      "month": "2016-03",
+      "file": "ticks/2016/2016-03.txt",
+      "tick_count": 2192311,
+      "size_bytes": 103074813,
+      "first_tick_utc": "2016-03-01T00:00:01.463983+00:00",
+      "last_tick_utc": "2016-03-31T23:59:56.9968778+00:00",
+      "sha256": "165bbbedcb3de56d04e3b87dc09ae65b3a50f7e43f77bb3964302f14874c9cd1"
+    },
+    {
+      "month": "2016-04",
+      "file": "ticks/2016/2016-04.txt",
+      "tick_count": 2173051,
+      "size_bytes": 102159285,
+      "first_tick_utc": "2016-04-01T00:00:08.3390906+00:00",
+      "last_tick_utc": "2016-04-29T20:59:59.8496961+00:00",
+      "sha256": "f514b110fef228064b934633d591ecf28145cefaf82befa086493c18a0003d65"
+    },
+    {
+      "month": "2016-05",
+      "file": "ticks/2016/2016-05.txt",
+      "tick_count": 2058059,
+      "size_bytes": 96767719,
+      "first_tick_utc": "2016-05-01T22:00:00.0508869+00:00",
+      "last_tick_utc": "2016-05-31T23:59:57.2999557+00:00",
+      "sha256": "144af691bbb3e31ccf305b24e7b6351772e3e016c61cd8e19d245981c266c3fc"
+    },
+    {
+      "month": "2016-06",
+      "file": "ticks/2016/2016-06.txt",
+      "tick_count": 2181094,
+      "size_bytes": 102532110,
+      "first_tick_utc": "2016-06-01T00:00:00.3588593+00:00",
+      "last_tick_utc": "2016-06-30T23:59:56.2324791+00:00",
+      "sha256": "7898c6ebd39374d6d05ef423cdd28278639f4d50a38b853ed33be1d67c268a9b"
+    },
+    {
+      "month": "2016-07",
+      "file": "ticks/2016/2016-07.txt",
+      "tick_count": 1671102,
+      "size_bytes": 78557274,
+      "first_tick_utc": "2016-07-01T00:00:00.0695291+00:00",
+      "last_tick_utc": "2016-07-31T23:59:52.6727872+00:00",
+      "sha256": "742fe0eaf928ae9c5a676d349909c2c650da46233fc30b453cde9f6a84c5e67f"
+    },
+    {
+      "month": "2016-08",
+      "file": "ticks/2016/2016-08.txt",
+      "tick_count": 1635394,
+      "size_bytes": 76875015,
+      "first_tick_utc": "2016-08-01T00:00:02.3395362+00:00",
+      "last_tick_utc": "2016-08-31T23:57:58.0494496+00:00",
+      "sha256": "79071ee8a7466fc940e004c9c9912175ec222703ccea55071b76f3cc80e2b51c"
+    },
+    {
+      "month": "2016-09",
+      "file": "ticks/2016/2016-09.txt",
+      "tick_count": 2098187,
+      "size_bytes": 98641264,
+      "first_tick_utc": "2016-09-01T00:00:00.0125129+00:00",
+      "last_tick_utc": "2016-09-30T20:59:57.1325522+00:00",
+      "sha256": "ec97169376f50082f8d48743f72beba0a905396ae7ad988e49a84135b188aa07"
+    },
+    {
+      "month": "2016-10",
+      "file": "ticks/2016/2016-10.txt",
+      "tick_count": 1901305,
+      "size_bytes": 89359211,
+      "first_tick_utc": "2016-10-02T22:00:00.0438873+00:00",
+      "last_tick_utc": "2016-10-31T23:59:55.4250768+00:00",
+      "sha256": "2a826f93909ed34a06940b2bb11397da52f9dc40b26aa1f3c54c13cfec133dbb"
+    },
+    {
+      "month": "2016-11",
+      "file": "ticks/2016/2016-11.txt",
+      "tick_count": 2414545,
+      "size_bytes": 113441689,
+      "first_tick_utc": "2016-11-01T00:00:04.1090321+00:00",
+      "last_tick_utc": "2016-11-30T23:59:46.5152683+00:00",
+      "sha256": "bbca623739986c341ea5f0c5db557f665c2f6bc37befcdd87ff63c6fd298c0d6"
+    },
+    {
+      "month": "2016-12",
+      "file": "ticks/2016/2016-12.txt",
+      "tick_count": 1592381,
+      "size_bytes": 74819445,
+      "first_tick_utc": "2016-12-01T00:00:00.0248924+00:00",
+      "last_tick_utc": "2016-12-30T21:59:58.8015852+00:00",
+      "sha256": "bb7c642c71168f46819678a37854d9fe1af6b90cd996534513b858c3c2c0db1c"
+    },
+    {
+      "month": "2017-01",
+      "file": "ticks/2017/2017-01.txt",
+      "tick_count": 1618987,
+      "size_bytes": 76088778,
+      "first_tick_utc": "2017-01-02T23:00:00.0470516+00:00",
+      "last_tick_utc": "2017-01-31T23:59:50.6767451+00:00",
+      "sha256": "1ed74027dec80c810ebccdd4eaa76a33c6005caae3028c9532a5f27dd27a6ab8"
+    },
+    {
+      "month": "2017-02",
+      "file": "ticks/2017/2017-02.txt",
+      "tick_count": 1378489,
+      "size_bytes": 64798035,
+      "first_tick_utc": "2017-02-01T00:00:00.0044961+00:00",
+      "last_tick_utc": "2017-02-28T23:59:56.9968951+00:00",
+      "sha256": "ab6de29abaffacdef771e72588f38350a104cb0c8bfe376b09726ed402fa2672"
+    },
+    {
+      "month": "2017-03",
+      "file": "ticks/2017/2017-03.txt",
+      "tick_count": 1882404,
+      "size_bytes": 88500614,
+      "first_tick_utc": "2017-03-01T00:00:00.0044881+00:00",
+      "last_tick_utc": "2017-03-31T20:59:59.0035533+00:00",
+      "sha256": "0f1370792a824da16a8f97ffee57c0a9a822c613e3994bb7360d8f6ab5b406d7"
+    },
+    {
+      "month": "2017-04",
+      "file": "ticks/2017/2017-04.txt",
+      "tick_count": 1711747,
+      "size_bytes": 80469958,
+      "first_tick_utc": "2017-04-02T22:00:00.0435368+00:00",
+      "last_tick_utc": "2017-04-30T23:59:52.1376338+00:00",
+      "sha256": "92ff12a3879328c21ae96dc956f2087cf3d0f2ddd3f3d6e0862e7270d4d6ee0c"
+    },
+    {
+      "month": "2017-05",
+      "file": "ticks/2017/2017-05.txt",
+      "tick_count": 1926767,
+      "size_bytes": 90591412,
+      "first_tick_utc": "2017-05-01T00:00:17.4661889+00:00",
+      "last_tick_utc": "2017-05-31T23:59:58.44722+00:00",
+      "sha256": "a2704295e4a039cace6380653c2832a207ab85307643fde0eeb1bd452c3f08d9"
+    },
+    {
+      "month": "2017-06",
+      "file": "ticks/2017/2017-06.txt",
+      "tick_count": 2953642,
+      "size_bytes": 138815631,
+      "first_tick_utc": "2017-06-01T00:00:00.0439168+00:00",
+      "last_tick_utc": "2017-06-30T20:59:55.6725081+00:00",
+      "sha256": "707cc264aeba1ff9da00c53ea0cf4f479e65b8db700b6e7c1d768c338577cea8"
+    },
+    {
+      "month": "2017-07",
+      "file": "ticks/2017/2017-07.txt",
+      "tick_count": 2376596,
+      "size_bytes": 111654067,
+      "first_tick_utc": "2017-07-02T22:00:00.0053008+00:00",
+      "last_tick_utc": "2017-07-31T23:59:55.3506592+00:00",
+      "sha256": "07b5b8d0e73a621de491187a94653893ab197486ddf6aae4ed81999c41b51652"
+    },
+    {
+      "month": "2017-08",
+      "file": "ticks/2017/2017-08.txt",
+      "tick_count": 3146310,
+      "size_bytes": 147830459,
+      "first_tick_utc": "2017-08-01T00:00:00.7284917+00:00",
+      "last_tick_utc": "2017-08-31T23:59:59.594835+00:00",
+      "sha256": "9c9dc345cabed98c2c85d1adc541579d85e0381947f3643f52a77eda9a90820b"
+    },
+    {
+      "month": "2017-09",
+      "file": "ticks/2017/2017-09.txt",
+      "tick_count": 2283330,
+      "size_bytes": 107323511,
+      "first_tick_utc": "2017-09-01T00:00:00.5331404+00:00",
+      "last_tick_utc": "2017-09-29T20:59:59.7948725+00:00",
+      "sha256": "bc3abbf7aacd61db4ff9df0a8020d794a0f563b670d8fdb81d3a1ff905282bcd"
+    },
+    {
+      "month": "2017-10",
+      "file": "ticks/2017/2017-10.txt",
+      "tick_count": 2122522,
+      "size_bytes": 99789206,
+      "first_tick_utc": "2017-10-01T22:00:00.0516192+00:00",
+      "last_tick_utc": "2017-10-31T23:59:51.1068574+00:00",
+      "sha256": "d0516a0d43a8df181cf0f3b2fcfad642274997d0490e7a0d83d56ab02c8b2e39"
+    },
+    {
+      "month": "2017-11",
+      "file": "ticks/2017/2017-11.txt",
+      "tick_count": 2569946,
+      "size_bytes": 120793746,
+      "first_tick_utc": "2017-11-01T00:00:00.1031115+00:00",
+      "last_tick_utc": "2017-11-30T23:59:59.6834154+00:00",
+      "sha256": "7f058ca235ae61d815fb8e621d319348ac5e98b6e2d0c97675c37720dc53855d"
+    },
+    {
+      "month": "2017-12",
+      "file": "ticks/2017/2017-12.txt",
+      "tick_count": 2298846,
+      "size_bytes": 108027658,
+      "first_tick_utc": "2017-12-01T00:00:00.0137236+00:00",
+      "last_tick_utc": "2017-12-29T21:59:59.386301+00:00",
+      "sha256": "b808e909919e7920fa99d99ad33aff07650a6eace3af48dbb8c8eb2161396f16"
+    },
+    {
+      "month": "2018-01",
+      "file": "ticks/2018/2018-01.txt",
+      "tick_count": 3115603,
+      "size_bytes": 146431083,
+      "first_tick_utc": "2018-01-01T23:00:00.0027391+00:00",
+      "last_tick_utc": "2018-01-31T23:59:51.112422+00:00",
+      "sha256": "86d78447b43a1ec082ec5cfdd9f336ea97780576302e18fc4fcfd2792b51ef12"
+    },
+    {
+      "month": "2018-02",
+      "file": "ticks/2018/2018-02.txt",
+      "tick_count": 5309242,
+      "size_bytes": 249221976,
+      "first_tick_utc": "2018-02-01T00:00:00.8059226+00:00",
+      "last_tick_utc": "2018-02-28T23:59:53.9111556+00:00",
+      "sha256": "98c6c4047079ab51eafabefd109173aa8b2d07b4298b29a616e1755988d65395"
+    },
+    {
+      "month": "2018-03",
+      "file": "ticks/2018/2018-03.txt",
+      "tick_count": 5827827,
+      "size_bytes": 273651980,
+      "first_tick_utc": "2018-03-01T00:00:00.0938705+00:00",
+      "last_tick_utc": "2018-03-29T20:59:58.5480746+00:00",
+      "sha256": "8fb72d3f299fa6648a50e0cf907601a86cc2febe536f9fa4632e8569dc0ad5a0"
+    },
+    {
+      "month": "2018-04",
+      "file": "ticks/2018/2018-04.txt",
+      "tick_count": 5461403,
+      "size_bytes": 256407817,
+      "first_tick_utc": "2018-04-01T22:00:00.004131+00:00",
+      "last_tick_utc": "2018-04-30T23:59:59.8115296+00:00",
+      "sha256": "6df352080e9abd8020f4d0fddc22a41bc150243069a08076351bd34aead27249"
+    },
+    {
+      "month": "2018-05",
+      "file": "ticks/2018/2018-05.txt",
+      "tick_count": 4111518,
+      "size_bytes": 193092135,
+      "first_tick_utc": "2018-05-01T00:00:00.0028685+00:00",
+      "last_tick_utc": "2018-05-31T23:59:59.7164753+00:00",
+      "sha256": "7caa9186be0b3942441f170f054b22d967ac7f94684784cce4e47202277971f5"
+    },
+    {
+      "month": "2018-06",
+      "file": "ticks/2018/2018-06.txt",
+      "tick_count": 3974080,
+      "size_bytes": 186654841,
+      "first_tick_utc": "2018-06-01T00:00:00.0134819+00:00",
+      "last_tick_utc": "2018-06-29T20:59:59.9206634+00:00",
+      "sha256": "902d05011fb6c6cc40bbaeb1a245b929b549819652f3676ddc47e15268387a30"
+    },
+    {
+      "month": "2018-07",
+      "file": "ticks/2018/2018-07.txt",
+      "tick_count": 3888470,
+      "size_bytes": 182604551,
+      "first_tick_utc": "2018-07-01T22:00:00.0890243+00:00",
+      "last_tick_utc": "2018-07-31T23:59:54.0417181+00:00",
+      "sha256": "d9705b3216759c1a853a7c155db9be5754fc5fbe56c709811a2b04cb410b696a"
+    },
+    {
+      "month": "2018-08",
+      "file": "ticks/2018/2018-08.txt",
+      "tick_count": 3966381,
+      "size_bytes": 186301441,
+      "first_tick_utc": "2018-08-01T00:00:00.00929+00:00",
+      "last_tick_utc": "2018-08-31T20:59:59.6572747+00:00",
+      "sha256": "d4d4dd13f2461b3d33d8d5fce820922fabf56d9451af430d51377abe5b148a05"
+    },
+    {
+      "month": "2018-09",
+      "file": "ticks/2018/2018-09.txt",
+      "tick_count": 4037012,
+      "size_bytes": 189617512,
+      "first_tick_utc": "2018-09-02T22:00:00.0967017+00:00",
+      "last_tick_utc": "2018-09-30T23:59:59.8191551+00:00",
+      "sha256": "bb8373b240594388c8a5e5422e5e5daf2324fb7b10b74acba1849a61d7ee30aa"
+    },
+    {
+      "month": "2018-10",
+      "file": "ticks/2018/2018-10.txt",
+      "tick_count": 9283515,
+      "size_bytes": 435775088,
+      "first_tick_utc": "2018-10-01T00:00:00.0125898+00:00",
+      "last_tick_utc": "2018-10-31T23:59:58.6300125+00:00",
+      "sha256": "e9b21db9ab1a233333c7df3f3893b1caa03d0912120734991373a1caf7323ac7"
+    },
+    {
+      "month": "2018-11",
+      "file": "ticks/2018/2018-11.txt",
+      "tick_count": 7308916,
+      "size_bytes": 343125471,
+      "first_tick_utc": "2018-11-01T00:00:00.3910909+00:00",
+      "last_tick_utc": "2018-11-30T21:59:59.2418197+00:00",
+      "sha256": "bb92f05e40061f7772dfa8059f7f3ea5f052304cfb69db0bb71bac31393c15cd"
+    },
+    {
+      "month": "2018-12",
+      "file": "ticks/2018/2018-12.txt",
+      "tick_count": 7684207,
+      "size_bytes": 360666163,
+      "first_tick_utc": "2018-12-02T23:00:00.1305565+00:00",
+      "last_tick_utc": "2018-12-31T21:59:56.0008552+00:00",
+      "sha256": "ee847f793392318d62addc179b98794f9682e3a9e6a1baffaeff0d250cc83809"
+    },
+    {
+      "month": "2019-01",
+      "file": "ticks/2019/2019-01.txt",
+      "tick_count": 6212877,
+      "size_bytes": 291730960,
+      "first_tick_utc": "2019-01-01T23:00:00.0073511+00:00",
+      "last_tick_utc": "2019-01-31T23:59:59.8043473+00:00",
+      "sha256": "a37aa83e9050f121f86a290fb575253dc39076de5ba4d7783fa5cfd56e1318ec"
+    },
+    {
+      "month": "2019-02",
+      "file": "ticks/2019/2019-02.txt",
+      "tick_count": 4113548,
+      "size_bytes": 193246554,
+      "first_tick_utc": "2019-02-01T00:00:00.1300515+00:00",
+      "last_tick_utc": "2019-02-28T23:59:59.9623731+00:00",
+      "sha256": "634d4f32646052a17602058d26fe00a7455976e35d4d37ef2cf89c103d9c38d1"
+    },
+    {
+      "month": "2019-03",
+      "file": "ticks/2019/2019-03.txt",
+      "tick_count": 4989327,
+      "size_bytes": 234415922,
+      "first_tick_utc": "2019-03-01T00:00:00.0850744+00:00",
+      "last_tick_utc": "2019-03-31T23:59:59.0720059+00:00",
+      "sha256": "7aa4153e4a44d9b7384ef83dbeb0340b0508792fd7b492db502b69b68078a4fe"
+    },
+    {
+      "month": "2019-04",
+      "file": "ticks/2019/2019-04.txt",
+      "tick_count": 3987763,
+      "size_bytes": 187385391,
+      "first_tick_utc": "2019-04-01T00:00:00.012813+00:00",
+      "last_tick_utc": "2019-04-30T23:59:59.9822675+00:00",
+      "sha256": "1985ef53aee6beedd0dcf64e18d18e0998e6441b6815ed5ddb4ece75afe219b1"
+    },
+    {
+      "month": "2019-05",
+      "file": "ticks/2019/2019-05.txt",
+      "tick_count": 3182377,
+      "size_bytes": 149473268,
+      "first_tick_utc": "2019-05-01T00:00:00.2393644+00:00",
+      "last_tick_utc": "2019-05-13T23:59:59.9558203+00:00",
+      "sha256": "6752f6df4dfb1db6c0ceab2a08cee6b734c576fe649c7bfd515c06749de5a22d"
+    }
+  ]
+}

@@ -22,16 +22,92 @@ public sealed class NinjaTraderTickImporter
     public IReadOnlyList<Tick> Read(string path, DateTime? fromUtc = null, DateTime? toUtc = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
-        using var reader = File.OpenText(path);
-        return Read(reader, Path.GetFullPath(path), fromUtc, toUtc);
+        string fullPath = Path.GetFullPath(path);
+        if (Directory.Exists(fullPath))
+            return ReadDirectory(fullPath, fromUtc, toUtc);
+        using var reader = File.OpenText(fullPath);
+        return Read(reader, fullPath, fromUtc, toUtc);
     }
 
     public IReadOnlyList<Tick> Read(TextReader reader, string sourceName = "input", DateTime? fromUtc = null, DateTime? toUtc = null)
     {
         ArgumentNullException.ThrowIfNull(reader);
         var ticks = new List<Tick>();
-        var lineNumber = 0;
         DateTime? previousTime = null;
+        ReadInto(reader, sourceName, fromUtc, toUtc, ticks, ref previousTime);
+        if (ticks.Count == 0)
+            throw new DataValidationException(sourceName, 1, "The file contains no ticks in the requested range.");
+        return ticks.AsReadOnly();
+    }
+
+    private IReadOnlyList<Tick> ReadDirectory(string directoryPath, DateTime? fromUtc, DateTime? toUtc)
+    {
+        var partitions = DiscoverMonthlyPartitions(directoryPath);
+        if (partitions.Count == 0)
+            throw new DataValidationException(directoryPath, 1, "The directory contains no monthly tick partition files (YYYY-MM.txt).");
+
+        var ticks = new List<Tick>();
+        DateTime? previousTime = null;
+        foreach (var (year, month, filePath) in partitions)
+        {
+            var monthStart = new DateTime(year, month, 1, 0, 0, 0, DateTimeKind.Utc);
+            var monthEndExclusive = monthStart.AddMonths(1);
+            if (fromUtc.HasValue && monthEndExclusive <= fromUtc.Value)
+                continue;
+            if (toUtc.HasValue && monthStart > toUtc.Value)
+                break;
+
+            using var reader = File.OpenText(filePath);
+            bool reachedEnd = ReadInto(reader, filePath, fromUtc, toUtc, ticks, ref previousTime);
+            if (reachedEnd)
+                break;
+        }
+
+        if (ticks.Count == 0)
+            throw new DataValidationException(directoryPath, 1, "The file contains no ticks in the requested range.");
+        return ticks.AsReadOnly();
+    }
+
+    private static List<(int Year, int Month, string Path)> DiscoverMonthlyPartitions(string directoryPath)
+    {
+        var result = new List<(int Year, int Month, string Path)>();
+        foreach (string file in Directory.EnumerateFiles(directoryPath, "*.txt", SearchOption.AllDirectories))
+        {
+            string stem = Path.GetFileNameWithoutExtension(file);
+            if (TryParseYearMonth(stem, out int year, out int month))
+                result.Add((year, month, file));
+        }
+        result.Sort(static (a, b) =>
+        {
+            int cmp = a.Year.CompareTo(b.Year);
+            if (cmp != 0) return cmp;
+            cmp = a.Month.CompareTo(b.Month);
+            return cmp != 0 ? cmp : StringComparer.Ordinal.Compare(a.Path, b.Path);
+        });
+        return result;
+    }
+
+    private static bool TryParseYearMonth(string stem, out int year, out int month)
+    {
+        year = 0;
+        month = 0;
+        if (stem.Length != 7 || stem[4] != '-')
+            return false;
+        return int.TryParse(stem.AsSpan(0, 4), NumberStyles.None, CultureInfo.InvariantCulture, out year)
+            && int.TryParse(stem.AsSpan(5, 2), NumberStyles.None, CultureInfo.InvariantCulture, out month)
+            && year is >= 1900 and <= 2999
+            && month is >= 1 and <= 12;
+    }
+
+    private static bool ReadInto(
+        TextReader reader,
+        string sourceName,
+        DateTime? fromUtc,
+        DateTime? toUtc,
+        List<Tick> ticks,
+        ref DateTime? previousTime)
+    {
+        var lineNumber = 0;
         while (reader.ReadLine() is { } line)
         {
             lineNumber++;
@@ -49,7 +125,7 @@ public sealed class NinjaTraderTickImporter
             if (fromUtc.HasValue && time < fromUtc.Value)
                 continue;
             if (toUtc.HasValue && time > toUtc.Value)
-                break;
+                return true;
 
             var price = ParsePrice(1);
             var bid = fields.Length == 5 ? ParsePrice(2) : price;
@@ -70,8 +146,6 @@ public sealed class NinjaTraderTickImporter
                 return value;
             }
         }
-        if (ticks.Count == 0)
-            throw new DataValidationException(sourceName, 1, "The file contains no ticks in the requested range.");
-        return ticks.AsReadOnly();
+        return false;
     }
 }

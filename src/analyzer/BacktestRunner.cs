@@ -73,10 +73,18 @@ public sealed class BacktestRunner
         var dayTrades = 0;
 
         double slippagePoints = request.SlippageTicks * request.Instrument.TickSize;
+        int totalBars = request.Bars.Count;
+        int barReportInterval = Math.Max(2000, totalBars / 100);
+        int barIndex = 0;
 
         foreach (var bar in request.Bars)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            barIndex++;
+            if (barIndex % barReportInterval == 0)
+            {
+                request.Progress?.Report((double)barIndex / totalBars);
+            }
             if (bar is null)
                 throw new ArgumentException("Bars may not contain null entries.", nameof(request));
             if (bar.CloseTimeUtc.Second != 0 || bar.CloseTimeUtc.Ticks % TimeSpan.TicksPerMinute != 0)
@@ -141,6 +149,26 @@ public sealed class BacktestRunner
                         OpenNewPosition(barOpenTime, targetQty, entryFill, entryComm, pending);
                         strategy.OnExecution(new ExecutionReport(barOpenTime, position, entryFill));
                     }
+                }
+                else if (Math.Sign(targetQty) == Math.Sign(position) && Math.Abs(targetQty) > Math.Abs(position) && inSession && !IsDailyLimitLocked())
+                {
+                    // Scaling in (Promediación / Bala #2)
+                    int addedQty = targetQty - position;
+                    var dir = Math.Sign(targetQty);
+                    var fill = bar.Open + dir * slippagePoints;
+                    var comm = Math.Abs(addedQty) * request.CommissionPerContractPerSide;
+                    paidCommissions += comm;
+                    entryCommission += comm;
+                    entryPrice = ((entryPrice * Math.Abs(position)) + (fill * Math.Abs(addedQty))) / Math.Abs(targetQty);
+                    position = targetQty;
+                    var slTicks = pending.StopLossTicks ?? request.StopLossTicks;
+                    var tpTicks = pending.TakeProfitTicks ?? request.TakeProfitTicks;
+                    if (slTicks.HasValue)
+                        stopPrice = entryPrice - dir * slTicks.Value * request.Instrument.TickSize;
+                    if (tpTicks.HasValue)
+                        targetPrice = entryPrice + dir * tpTicks.Value * request.Instrument.TickSize;
+                    ObservePrice(fill);
+                    strategy.OnExecution(new ExecutionReport(barOpenTime, position, fill));
                 }
                 pending = null;
             }
@@ -460,10 +488,18 @@ public sealed class BacktestRunner
         long barVolume = 0, barDeltaVolume = 0, barAskVolume = 0, barBidVolume = 0, barTickCount = 0;
 
         double slippagePoints = request.SlippageTicks * request.Instrument.TickSize;
+        int totalTicks = request.Ticks.Count;
+        int tickReportInterval = Math.Max(10000, totalTicks / 100);
+        int tickIndex = 0;
 
         foreach (var tick in request.Ticks)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            tickIndex++;
+            if (tickIndex % tickReportInterval == 0)
+            {
+                request.Progress?.Report((double)tickIndex / totalTicks);
+            }
             if (tick is null)
                 throw new ArgumentException("Ticks may not contain null entries.", nameof(request));
 
@@ -579,6 +615,27 @@ public sealed class BacktestRunner
                         OpenNewTickPosition(tick.TimeUtc, targetQty, entryFill, entryComm, pending);
                         strategy.OnExecution(new ExecutionReport(tick.TimeUtc, position, entryFill));
                     }
+                }
+                else if (Math.Sign(targetQty) == Math.Sign(position) && Math.Abs(targetQty) > Math.Abs(position) && inSession && !IsDailyLimitLocked())
+                {
+                    // Scaling in on tick (Promediación / Bala #2)
+                    int addedQty = targetQty - position;
+                    var dir = Math.Sign(targetQty);
+                    var entryBook = dir > 0 ? tick.Ask : tick.Bid;
+                    var fill = entryBook + dir * slippagePoints;
+                    var comm = Math.Abs(addedQty) * request.CommissionPerContractPerSide;
+                    paidCommissions += comm;
+                    entryCommission += comm;
+                    entryPrice = ((entryPrice * Math.Abs(position)) + (fill * Math.Abs(addedQty))) / Math.Abs(targetQty);
+                    position = targetQty;
+                    var slTicks = pending.StopLossTicks ?? request.StopLossTicks;
+                    var tpTicks = pending.TakeProfitTicks ?? request.TakeProfitTicks;
+                    if (slTicks.HasValue)
+                        stopPrice = entryPrice - dir * slTicks.Value * request.Instrument.TickSize;
+                    if (tpTicks.HasValue)
+                        targetPrice = entryPrice + dir * tpTicks.Value * request.Instrument.TickSize;
+                    ObserveTickPrice(fill);
+                    strategy.OnExecution(new ExecutionReport(tick.TimeUtc, position, fill));
                 }
                 pending = null;
             }

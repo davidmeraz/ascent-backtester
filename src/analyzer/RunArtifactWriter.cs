@@ -55,8 +55,47 @@ public sealed class RunArtifactWriter
 
     public static string FileHash(string path)
     {
+        if (Directory.Exists(path))
+            return DirectoryHash(path);
         using var stream = File.OpenRead(path);
         return Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant();
+    }
+
+    private static string DirectoryHash(string directoryPath)
+    {
+        string? parentDir = Path.GetDirectoryName(directoryPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+        if (!string.IsNullOrEmpty(parentDir))
+        {
+            string catalogPath = Path.Combine(parentDir, "catalog.json");
+            if (File.Exists(catalogPath))
+            {
+                try
+                {
+                    using var doc = JsonDocument.Parse(File.ReadAllBytes(catalogPath));
+                    if (doc.RootElement.TryGetProperty("combined_ticks_sha256", out var combined)
+                        && combined.ValueKind == JsonValueKind.String
+                        && !string.IsNullOrWhiteSpace(combined.GetString()))
+                    {
+                        return combined.GetString()!.Trim().ToLowerInvariant();
+                    }
+                }
+                catch (JsonException) { }
+                using var catStream = File.OpenRead(catalogPath);
+                return Convert.ToHexString(SHA256.HashData(catStream)).ToLowerInvariant();
+            }
+        }
+
+        using var hasher = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        var buffer = new byte[1024 * 1024];
+        foreach (string file in Directory.EnumerateFiles(directoryPath, "*.txt", SearchOption.AllDirectories)
+            .OrderBy(static p => p, StringComparer.Ordinal))
+        {
+            using var stream = File.OpenRead(file);
+            int read;
+            while ((read = stream.Read(buffer, 0, buffer.Length)) > 0)
+                hasher.AppendData(buffer, 0, read);
+        }
+        return Convert.ToHexString(hasher.GetHashAndReset()).ToLowerInvariant();
     }
 
     private static void WriteSignals(BacktestResult result, string path, string codeHash)
